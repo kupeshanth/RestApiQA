@@ -34,6 +34,7 @@
 | 22 | ETL / Data Pipeline | [→ Open](guides/22-ETL-DATA-PIPELINE-TESTING-GUIDE.md) |
 | 23 | Test Reporting (Allure) | [→ Open](guides/23-TEST-REPORTING-ALLURE-EXTENTREPORTS-GUIDE.md) |
 | 24 | Google Cloud Spanner | [→ Open](guides/24-GOOGLE-CLOUD-SPANNER-TESTING-GUIDE.md) |
+| 25 | Core Java + OOP + Design Patterns | [→ Open](guides/25-CORE-JAVA-AUTOMATION-GUIDE.md) |
 
 ---
 
@@ -583,6 +584,56 @@ A: API call → use Java Spanner client to query → `Statement.of("SELECT * FRO
 
 **Q: Why use UUID instead of sequential IDs in Spanner?**
 A: Sequential IDs cause "hot spots" — all writes go to same server. UUIDs distribute writes evenly.
+
+---
+
+## 22. CORE JAVA & OOP
+> Need more depth? [→ Full Java Guide](guides/25-CORE-JAVA-AUTOMATION-GUIDE.md)
+
+**Q: == vs .equals() for Strings?**
+A: `==` compares references (memory address). `.equals()` compares content. ALWAYS use `.equals()` for Strings.
+
+**Q: 4 pillars of OOP?**
+A: Encapsulation (hide data), Inheritance (reuse parent), Polymorphism (same method different behaviour), Abstraction (hide complexity).
+
+**Q: Interface vs Abstract class?**
+A: Abstract class = partial implementation, one parent only. Interface = pure contract, implement many. Use abstract for shared code (BaseTest), interface for capability (WebDriver).
+
+**Q: Overloading vs Overriding?**
+A: Overloading = same class, same name, different params, compile-time. Overriding = child replaces parent method, runtime, needs `@Override`.
+
+**Q: What is ThreadLocal?**
+A: Each thread gets its own copy of a variable. Used in parallel Selenium to give each test its own WebDriver.
+
+**Q: ArrayList vs LinkedList?**
+A: ArrayList = fast random access, slow middle insert. LinkedList = slow random access, fast insert/delete. Use ArrayList for most cases.
+
+**Q: What is autoboxing?**
+A: Auto-convert primitive to wrapper: `int` → `Integer`. Happens when adding int to `List<Integer>`.
+
+**Q: Checked vs Unchecked exceptions?**
+A: Checked = compiler forces handling (IOException). Unchecked (RuntimeException) = optional (NullPointerException, NoSuchElementException).
+
+**Q: What is Singleton pattern?**
+A: One instance of a class shared everywhere. Private constructor + static getInstance(). Used for ConfigReader, DriverFactory.
+
+**Q: What is Builder pattern?**
+A: Construct complex objects step by step with readable chaining: `new User.Builder().name("x").email("y").build()`.
+
+**Q: What is Factory pattern?**
+A: Create objects without specifying exact class. `DriverFactory.createDriver("chrome")` hides which driver class is used.
+
+**Q: What is `final` on a variable?**
+A: Cannot be reassigned after assignment. `public static final String BASE_URL = "..."` — constant.
+
+**Q: What does `static` mean on a method?**
+A: Belongs to the class, not an instance. Call without creating object: `Math.sqrt()`, `Collections.sort()`.
+
+**Q: What is a Stream in Java 8?**
+A: Pipeline operations on collections. `list.stream().filter().map().collect()`. Replaces verbose for-loops.
+
+**Q: Design patterns you use in automation?**
+A: POM (Page Object), Singleton (ConfigReader), Factory (DriverFactory), Builder (test data), Strategy (wait strategies).
 
 ---
 
