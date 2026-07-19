@@ -1,968 +1,1709 @@
-# ISTQB & QA Fundamentals — Complete Guide | Testing Theory + Techniques + Defect Management
+# ISTQB & QA Fundamentals — Complete Interview Q&A Guide
 
 ---
 
-## Table of Contents
-
-1. [SDLC vs STLC — All Phases with QA Activities](#1-sdlc-vs-stlc--all-phases-with-qa-activities)
-2. [Test Levels](#2-test-levels)
-3. [Test Types](#3-test-types)
-4. [Verification vs Validation](#4-verification-vs-validation)
-5. [Black-Box Test Design Techniques](#5-black-box-test-design-techniques)
-6. [White-Box Test Design Techniques](#6-white-box-test-design-techniques)
-7. [Test Design Process](#7-test-design-process)
-8. [Defect Lifecycle](#8-defect-lifecycle)
-9. [Defect Severity vs Priority](#9-defect-severity-vs-priority)
-10. [Risk-Based Testing](#10-risk-based-testing)
-11. [Test Planning](#11-test-planning)
-12. [Exploratory vs Scripted Testing](#12-exploratory-vs-scripted-testing)
-13. [Regression Testing Strategy](#13-regression-testing-strategy)
-14. [Performance Testing Concepts](#14-performance-testing-concepts)
-15. [Non-Functional Testing Types](#15-non-functional-testing-types)
-16. [Test Metrics](#16-test-metrics)
-17. [Agile Testing — Shift-Left, Three Amigos, BDD](#17-agile-testing--shift-left-three-amigos-bdd)
-18. [Interview Q&A (10 Questions)](#18-interview-qa-10-questions)
+## SECTION 1: SDLC AND STLC
 
 ---
 
-## 1. SDLC vs STLC — All Phases with QA Activities
+**Q1: What is the SDLC? What are QA's activities at each phase?**
 
-### SDLC — Software Development Life Cycle
+**A:**
 
-The SDLC is the overall process for building software. QA is involved at every phase, not just at the end.
+The Software Development Life Cycle (SDLC) is the structured process for planning, creating, testing, and delivering a software application. QA is not a phase that happens at the end — QA has activities at every single phase.
 
-| Phase | Description | QA Activities |
+| SDLC Phase | What Happens | QA Activities |
 |---|---|---|
-| **Requirements** | Business needs gathered, documented | Review requirements for ambiguity, testability, completeness; raise questions early |
-| **System Design** | Architecture, database schema, API contracts designed | Review design docs; identify testability concerns; plan test approach |
-| **Implementation** | Developers write code | Write test cases; prepare test data; set up test environments |
-| **Testing** | Verify the built software | Execute tests (unit, integration, system, UAT); report defects; track fixes |
-| **Deployment** | Release to production | Smoke testing in production; verify deployment success; monitor |
-| **Maintenance** | Bug fixes, enhancements | Regression testing after fixes; test new features; maintain test suite |
+| **Requirements** | Business analysts gather and document what the software must do | Review requirements for ambiguity, completeness, and testability; raise questions; identify risks |
+| **System Design** | Architects design the system: database schema, APIs, UI wireframes | Review design documents; identify testability concerns (can we observe the state?); plan the test approach |
+| **Implementation (Coding)** | Developers write code | Write test cases; prepare test data; set up test environments; write automation code in parallel |
+| **Testing** | Verify and validate the built software | Execute tests (unit, integration, system, UAT); log defects; track fixes; retest; regression test |
+| **Deployment** | Release to production | Smoke test in production after deployment; verify core flows work; monitor for anomalies |
+| **Maintenance** | Fix bugs, add features | Regression test after every fix; test new features; maintain and update the automated test suite |
 
-**Key QA principle**: Defect cost increases the later it is found. A requirements defect costs 1x to fix; a production defect costs 100x. QA involvement from day one saves money and time.
+**Key principle:** Defects found later are exponentially more expensive to fix. A requirements defect caught by QA during the requirements phase takes minutes to resolve. The same defect found in production may require a hotfix, data migration, customer communication, and reputational damage.
 
-### STLC — Software Testing Life Cycle
+---
 
-The STLC is QA's own process — the sequence of testing activities.
+**Q2: What is the STLC? What are its phases and what makes each phase start and end?**
 
-| Phase | Description | Entry Criteria | Exit Criteria |
+**A:**
+
+The Software Testing Life Cycle (STLC) is QA's own process — the sequence of activities the testing team performs. It runs in parallel with (not after) the SDLC.
+
+| Phase | What Happens | Entry Criteria | Exit Criteria |
 |---|---|---|---|
-| **Requirement Analysis** | QA studies requirements, identifies what to test | Requirements available, stable | Test scope documented, ambiguities resolved |
-| **Test Planning** | Define strategy, scope, resources, schedule | Requirements reviewed | Test plan approved |
-| **Test Case Design** | Write test cases, prepare test data | Test plan approved | Test cases written and reviewed |
-| **Test Environment Setup** | Configure servers, browsers, databases | Test cases ready | Environment verified with smoke test |
-| **Test Execution** | Run tests, log defects | Environment ready, build delivered | All planned tests executed |
-| **Test Closure** | Evaluate completion, lessons learned | Execution complete, exit criteria met | Test closure report signed off |
+| **Requirement Analysis** | QA studies requirements; identifies what to test; flags ambiguities | Requirements document available and stable | Test scope documented; all ambiguities resolved and answered |
+| **Test Planning** | Define strategy, scope, schedule, resources, tools, environment needs | Requirements reviewed by QA | Test plan written and approved by stakeholders |
+| **Test Case Design** | Write test cases; create test data; design automation scripts | Test plan approved | Test cases written, reviewed, and signed off |
+| **Test Environment Setup** | Configure servers, databases, browsers, devices, test accounts | Test cases ready | Environment set up and verified with an initial smoke test |
+| **Test Execution** | Execute test cases; log defects; retest fixes; do regression | Build deployed to test environment; environment verified | All planned tests executed; exit criteria met (pass rate, defect count) |
+| **Test Closure** | Evaluate quality; document lessons learned; archive test artefacts | All testing complete; exit criteria met | Test closure report signed off by stakeholders |
+
+**STLC vs SDLC — the key distinction:**
+- SDLC covers the entire project from idea to deployment
+- STLC is QA's process nested within the SDLC — it has its own phases, entry/exit criteria, and deliverables
 
 ---
 
-## 2. Test Levels
+**Q3: What is the difference between SDLC and STLC?**
 
-### Unit Testing
+**A:**
 
-- **What**: Testing individual components (methods, functions, classes) in isolation
-- **Who writes**: Developers
-- **Tools**: JUnit, NUnit, Pytest, Jest, Mocha
-- **Example**: Testing that `calculateTax(100, 0.15)` returns `15.0`
-- **Scope**: No DB, no HTTP calls — mocked/stubbed dependencies
-
-### Integration Testing
-
-- **What**: Testing that two or more components work together correctly
-- **Who writes**: Developers + QA
-- **Tools**: TestNG, JUnit, Pytest, Postman/RestAssured for API integration
-- **Examples**:
-  - Testing that the service layer correctly calls the repository layer and returns a mapped DTO
-  - Testing that the checkout service correctly calls the payment API
-- **Scope**: Real DB or test DB; services talk to each other
-
-### System Testing
-
-- **What**: Testing the complete, integrated system against requirements
-- **Who writes**: QA
-- **Tools**: Selenium, Playwright, RestAssured, manual testing
-- **Examples**:
-  - End-to-end user registration flow through UI
-  - API test covering full CRUD lifecycle
-- **Scope**: Full stack — UI, API, DB, external services (or stubs)
-
-### Acceptance Testing
-
-- **What**: Verifying the system meets business requirements and is ready for delivery
-- **Who does it**: Business stakeholders + QA (or customers)
-- **Types**:
-  - **UAT** (User Acceptance Testing): Business users test real scenarios
-  - **Alpha testing**: Internal testing by a selected user group before release
-  - **Beta testing**: External users test in production-like environment
-- **Scope**: Full production-like environment; test from user perspective
-
-### Test Level Pyramid
-
-```
-        ┌──────────────┐
-        │   UI Tests   │  ← Few, slow, expensive
-        ├──────────────┤
-        │  API Tests   │  ← Moderate number, fast
-        ├──────────────┤
-        │ Unit Tests   │  ← Many, very fast, cheap
-        └──────────────┘
-```
-
----
-
-## 3. Test Types
-
-### Functional Testing
-
-Tests that the system does what it should do — business logic and features work correctly.
-
-- Login, registration, checkout, search, CRUD operations
-- Positive tests: valid inputs produce expected outputs
-- Negative tests: invalid inputs are handled gracefully
-
-### Non-Functional Testing
-
-Tests how the system behaves, not what it does.
-
-- Performance, security, usability, reliability, compatibility
-- Usually separate from functional testing; requires specialist tools
-
-### Structural Testing (White-Box)
-
-Based on the internal structure of the code. Ensures all code paths are exercised.
-
-- Statement coverage, branch coverage, path coverage
-- Done primarily by developers
-
-### Change-Related Testing
-
-Done after code changes to verify nothing is broken.
-
-- **Regression testing**: Re-run existing tests after changes
-- **Confirmation testing (Re-testing)**: Re-test specifically the defect that was fixed
-
----
-
-## 4. Verification vs Validation
-
-| | Verification | Validation |
+| Aspect | SDLC | STLC |
 |---|---|---|
-| **Question asked** | "Are we building the product right?" | "Are we building the right product?" |
-| **Focus** | Process, standards, documents | The actual product/system |
-| **When** | Throughout development | Usually at the end of a phase |
-| **Techniques** | Reviews, walkthroughs, inspections | Testing, demonstrations, prototypes |
-| **Example** | Reviewing a test plan against standards | Running tests on the live application |
-| **Who** | QA + team | QA + stakeholders |
+| **Scope** | Entire software development process | Testing activities only |
+| **Who owns it** | Project manager / development team | QA / test manager |
+| **Goal** | Build working software | Verify and validate the built software |
+| **Phases** | Requirements, Design, Code, Test, Deploy, Maintain | Requirement Analysis, Planning, Design, Environment Setup, Execution, Closure |
+| **Start** | When a project is initiated | When requirements are first available |
+| **End** | When software is retired | When testing is complete and signed off |
+| **Relationship** | STLC is a subset of SDLC | STLC runs within the Testing phase of SDLC (and earlier, with shift-left) |
 
-**Memory trick**: Verification = checking the spec/documents. Validation = checking the actual software.
-
----
-
-## 5. Black-Box Test Design Techniques
-
-Black-box techniques derive tests from requirements and specifications, with no knowledge of internal code.
-
-### 5.1 Equivalence Partitioning (EP)
-
-**Principle**: Divide input data into groups (partitions) where every value in the partition is expected to behave the same way. Test one representative value from each partition.
-
-**Why**: Avoids testing every possible value (infinite) and instead tests each class of behaviour.
-
-**Example: Age field — must be between 18 and 65 (inclusive)**
-
-| Partition | Range | Representative Value | Type |
-|---|---|---|---|
-| Invalid — too young | Below 18 | 10 | Invalid |
-| Valid | 18 to 65 | 30 | Valid |
-| Invalid — too old | Above 65 | 80 | Invalid |
-
-Minimum 3 test cases instead of testing every possible age.
-
-**Another example: HTTP status codes**
-
-| Partition | Values | Test Value |
-|---|---|---|
-| Success | 200–299 | 200 |
-| Redirection | 300–399 | 301 |
-| Client error | 400–499 | 404 |
-| Server error | 500–599 | 500 |
-
-### 5.2 Boundary Value Analysis (BVA)
-
-**Principle**: Defects cluster at the edges of partitions. Test the minimum, maximum, and values just inside/outside the boundaries.
-
-**Extension of EP**: Apply BVA at the boundaries of each partition.
-
-**Example: Age field — must be between 18 and 65 (inclusive)**
-
-| Boundary | Value | Expected Result |
-|---|---|---|
-| Just below minimum | 17 | Invalid |
-| At minimum | 18 | Valid |
-| Just above minimum | 19 | Valid |
-| Just below maximum | 64 | Valid |
-| At maximum | 65 | Valid |
-| Just above maximum | 66 | Invalid |
-
-6 boundary test cases capture most edge-case defects.
-
-**2-value vs 3-value BVA:**
-- 2-value: test the boundary and just outside it (min/max + invalid on each side)
-- 3-value: test just below, at, and just above each boundary
-
-**Example: Discount calculation — 10% off if order >= £100**
-
-| Value | Expected |
-|---|---|
-| £99 | No discount |
-| £100 | 10% discount |
-| £101 | 10% discount |
-
-### 5.3 Decision Table Testing
-
-**Use when**: There are combinations of conditions that lead to different actions.
-
-**Principle**: Create a table listing all condition combinations and the expected action for each.
-
-**Example: Loan application**
-
-Conditions:
-- Credit score: Good or Poor
-- Income: Above threshold or Below threshold
-- Collateral: Yes or No
-
-| | Rule 1 | Rule 2 | Rule 3 | Rule 4 | Rule 5 | Rule 6 | Rule 7 | Rule 8 |
-|---|---|---|---|---|---|---|---|---|
-| Credit score | Good | Good | Good | Good | Poor | Poor | Poor | Poor |
-| Income | Above | Above | Below | Below | Above | Above | Below | Below |
-| Collateral | Yes | No | Yes | No | Yes | No | Yes | No |
-| **Action** | Approve | Approve | Approve | Reject | Approve | Reject | Reject | Reject |
-
-Each column is one test case. This ensures all logical combinations are covered.
-
-**When to use**: Login logic, pricing rules, permission systems, discount calculators.
-
-### 5.4 State Transition Testing
-
-**Use when**: The system can be in different states, and input events cause transitions between states.
-
-**Principle**: Model the system as states, events (inputs), and transitions. Derive tests to cover all states and transitions.
-
-**Example: Order status**
-
-```
-[Created] --pay--> [Paid] --ship--> [Shipped] --deliver--> [Delivered]
-    |                                    |
-    +--cancel--> [Cancelled]    --return--> [Returned]
-```
-
-**State table:**
-
-| Current State | Event | Next State | Action |
-|---|---|---|---|
-| Created | Pay | Paid | Confirm payment |
-| Created | Cancel | Cancelled | Send cancellation email |
-| Paid | Ship | Shipped | Send tracking info |
-| Paid | Cancel | Cancelled | Refund payment |
-| Shipped | Deliver | Delivered | Send delivery confirmation |
-| Shipped | Return | Returned | Process return |
-
-**Tests to write:**
-1. Valid path: Created → Paid → Shipped → Delivered
-2. Cancellation from Created
-3. Cancellation from Paid (tests refund logic)
-4. Return from Shipped
-5. Invalid transition: trying to Ship an order that is still Created (should be blocked)
-
-### 5.5 Use Case Testing
-
-**Principle**: Derive tests directly from use cases (scenarios of how users interact with the system).
-
-**Use case: User logs in**
-- Basic flow: User enters valid email and password → logged in → redirected to dashboard
-- Alternative flow 1: User enters wrong password → error message shown
-- Alternative flow 2: User enters unregistered email → error message
-- Alternative flow 3: User clicks "Forgot password" → password reset email sent
-- Exception flow: System is down → user sees a friendly error page
-
-Each flow becomes one or more test cases.
+**Interview answer tip:** SDLC is the parent process; STLC is QA's process within it. The STLC does not wait for the SDLC's "Testing" phase to begin — with shift-left testing, QA starts the STLC (requirement analysis, test planning) as soon as requirements are available.
 
 ---
 
-## 6. White-Box Test Design Techniques
+## SECTION 2: TEST LEVELS AND THE PYRAMID
 
-White-box techniques are based on the internal code structure.
+---
 
-### Statement Coverage
+**Q4: What are the test levels? Explain each with a concrete example.**
 
-**Goal**: Every executable statement in the code is executed at least once.
+**A:**
+
+Test levels are distinct groups of testing activities, each focusing on a different part of the system and typically done at different times by different people.
+
+**Level 1: Unit Testing**
+
+Tests individual components (methods, functions, classes) in complete isolation. Dependencies are replaced with mocks or stubs.
+
+- Who writes: Developers
+- Tools: JUnit, NUnit, Jest, Pytest, Mocha
+- Speed: Very fast (milliseconds per test)
+- Example: Testing that a `calculateTax(amount, rate)` method returns the correct value for various inputs without calling a database or API
 
 ```java
-// Code under test
-public String classify(int n) {
-    String result = "";                    // Line 1
-    if (n > 0) {                           // Line 2
-        result = "positive";               // Line 3
-    }
-    if (n < 0) {                           // Line 4
-        result = "negative";               // Line 5
-    }
-    return result;                         // Line 6
+@Test
+void calculateTax_withPositiveAmountAndRate_returnsCorrectTax() {
+    TaxCalculator calc = new TaxCalculator();
+    double tax = calc.calculateTax(100.00, 0.15);
+    assertEquals(15.00, tax, 0.001, "Tax should be 15% of 100");
 }
 ```
 
-To achieve 100% statement coverage: need `n > 0` (hits line 3) and `n < 0` (hits line 5).
-Two tests: n=5, n=-5. But n=0 returns "" and that is not exposed by statement coverage.
+**Level 2: Integration Testing**
 
-### Branch Coverage (Decision Coverage)
+Tests that two or more components work together correctly. Real dependencies (databases, services) may be used or partially mocked.
 
-**Goal**: Every branch (true/false outcome) of every decision point is executed.
+- Who writes: Developers + QA
+- Tools: TestNG, RestAssured, Postman, Spring Test
+- Example: Testing that the `OrderService.placeOrder()` method correctly calls the `InventoryRepository` to reduce stock and then calls the `PaymentService` to charge the customer — all three components working together
 
-For the example above:
-- Test 1: n=5 → `n > 0` is TRUE (line 3 executes), `n < 0` is FALSE (line 5 skipped)
-- Test 2: n=-5 → `n > 0` is FALSE (line 3 skipped), `n < 0` is TRUE (line 5 executes)
-- Test 3: n=0 → both conditions FALSE
+**Level 3: System Testing**
 
-Branch coverage is stronger than statement coverage and is the minimum recommended for production code.
+Tests the complete, integrated system against the specified requirements. This is the primary QA level.
 
-### Path Coverage
+- Who writes: QA
+- Tools: Selenium, Playwright, RestAssured, Cypress
+- Example: Testing the full user registration flow through the UI — fill in name, email, password, submit, verify confirmation email, click link, verify account is active — end-to-end through the real stack
 
-**Goal**: Every unique path through the code is executed.
+**Level 4: Acceptance Testing**
 
-Number of paths grows exponentially with the number of conditions — impractical for complex code. Used in safety-critical systems.
+Verifying the system meets business requirements and is ready for delivery. Done from the user perspective.
 
-**Cyclomatic Complexity (McCabe)**: Measures the number of linearly independent paths.
-- Formula: CC = E - N + 2P (edges minus nodes plus 2 × connected components)
-- Simple interpretation: CC = number of decision points + 1
-- CC > 10 means the code is too complex — refactor it
-- CC also tells you the minimum number of tests for branch coverage
+- Who does it: Business stakeholders + QA
+- Types: UAT (User Acceptance Testing), Alpha testing, Beta testing
+- Example: A business user testing the new expense approval workflow in a UAT environment against a real business scenario, confirming it matches the agreed process
 
 ---
 
-## 7. Test Design Process
+**Q5: What is the test pyramid? Why is it important?**
 
-The ISTQB-defined progression from requirements to executable tests:
+**A:**
 
-```
-Requirements / User Stories
-         ↓
-   Test Conditions
-(what needs to be tested)
-         ↓
-    Test Cases
-(specific input/expected output)
-         ↓
-  Test Procedures
-(step-by-step execution instructions)
-         ↓
-   Test Scripts
-(automated code implementing the procedure)
-```
-
-### Test Conditions
-
-A testable aspect of a component or system identified from requirements.
-
-- Requirement: "The login page must validate the email format"
-- Test conditions:
-  - Valid email format
-  - Missing @ symbol
-  - Missing domain
-  - Missing username part
-  - Multiple @ symbols
-  - Spaces in email
-
-### Test Cases
-
-A test case specifies:
-1. **Test Case ID** — unique identifier
-2. **Title/Description** — what is being tested
-3. **Preconditions** — what must be true before execution
-4. **Test Steps** — numbered actions to perform
-5. **Test Data** — inputs
-6. **Expected Result** — what should happen
-7. **Actual Result** — filled in during execution
-8. **Pass/Fail** — outcome
-
-### Example Test Case
-
-| Field | Value |
-|---|---|
-| **ID** | TC_LOGIN_003 |
-| **Title** | Login with invalid email format |
-| **Preconditions** | Application is running; login page is displayed |
-| **Test Steps** | 1. Enter `notanemail` in email field; 2. Enter `Password123` in password field; 3. Click Login |
-| **Test Data** | Email: `notanemail`, Password: `Password123` |
-| **Expected Result** | Error message "Please enter a valid email address" is displayed; user is not logged in |
-| **Priority** | Medium |
-| **Type** | Negative, Functional |
-
----
-
-## 8. Defect Lifecycle
-
-### All Defect States
+The test pyramid (by Mike Cohn) is a model for the ideal distribution of test types in a test suite. It represents the recommended ratio of tests at each level.
 
 ```
-Developer fixes it ──────────────────────────────────────┐
-                                                          ↓
-[New] → [Assigned] → [Open] → [Fixed] → [Retest] → [Closed]
-  │                    │                    │
-  │                    │                    └→ [Reopened] → [Open]
-  │                    └→ [Deferred]
-  └→ [Rejected]
+            /\
+           /  \
+          / UI \            <- Fewest tests (slow, brittle, expensive)
+         /------\
+        /  API   \          <- More tests (fast, stable, good coverage)
+       /----------\
+      /  Unit Tests \       <- Most tests (very fast, very cheap, very stable)
+     /--------------\
 ```
 
-### State Descriptions
+**Why the pyramid shape matters:**
 
-| State | When It Applies | Who Changes It |
-|---|---|---|
-| **New** | QA logs the defect; not yet reviewed | QA |
-| **Assigned** | Tech lead / developer has been assigned ownership | Lead / PM |
-| **Open** | Developer has accepted and is working on the fix | Developer |
-| **Fixed** | Developer has fixed and deployed the fix to the test environment | Developer |
-| **Retest** | QA is verifying the fix | QA |
-| **Closed** | QA has verified the fix; defect no longer reproducible | QA |
-| **Reopened** | QA retested and the defect is still present | QA |
-| **Deferred** | Acknowledged but will not be fixed in this release; moved to backlog | PM / Lead |
-| **Rejected** | Developer or lead determines it is not a defect (works as designed, cannot reproduce, duplicate) | Developer / Lead |
-| **Duplicate** | Same defect already logged; this instance is closed | QA / Lead |
-
-### Important Rules
-
-- Only QA should move a defect to **Closed** — never the developer
-- Only QA should move a defect to **Reopened** — after failed retest
-- **Deferred** is not the same as **Closed** — the bug still exists
-- **Rejected** must include a reason; QA can escalate if they disagree
-
-### What to Include in a Good Defect Report
-
-1. **Title**: Short, specific. Not "Login doesn't work" — use "Login fails with valid credentials when email contains uppercase letters"
-2. **Environment**: Browser, OS, version, URL
-3. **Steps to Reproduce**: Numbered, minimal, reproducible
-4. **Expected Result**: What should happen
-5. **Actual Result**: What actually happened
-6. **Severity**: How bad is the impact?
-7. **Priority**: How urgently should it be fixed?
-8. **Screenshots / Videos / Logs**: Evidence
-9. **Test Data**: Exact data used
-
----
-
-## 9. Defect Severity vs Priority
-
-### Definitions
-
-- **Severity**: The technical impact of the defect on the system's functionality. "How bad is it?"
-- **Priority**: The business urgency of fixing the defect. "How soon must it be fixed?"
-
-These are independent and set by different people:
-- Severity is set by QA (technical assessment)
-- Priority is set by PM/Business (business decision)
-
-### Severity Levels
-
-| Level | Description | Example |
-|---|---|---|
-| **Critical (S1)** | System crashes, data loss, security breach, core function completely broken | Payment processing fails; user data deleted; app crashes on launch |
-| **Major (S2)** | Major feature broken but workaround exists | Export to PDF fails; search returns no results |
-| **Minor (S3)** | Feature works but with cosmetic/functional issues | Dropdown not sorted alphabetically; tooltip text wrong |
-| **Trivial (S4)** | Cosmetic defect with no functional impact | Misaligned button by 2px; wrong font colour |
-
-### Priority Levels
-
-| Level | Description | Example |
-|---|---|---|
-| **Critical (P1)** | Must fix immediately, blocks release | Homepage shows 500 error |
-| **High (P2)** | Must fix in current sprint/release | Core workflow broken |
-| **Medium (P3)** | Should fix in near-term release | Non-critical feature broken |
-| **Low (P4)** | Fix when time permits | Minor cosmetic issues |
-
-### The 4 × 4 Matrix — All Combinations Explained
-
-| Severity | Priority | Example | Why |
-|---|---|---|---|
-| High Severity + High Priority | S1/P1 | Payment gateway is down | Broken core feature + high business impact |
-| High Severity + Low Priority | S1/P4 | Crash on a rarely-used legacy report | System crashes but almost nobody uses that feature |
-| Low Severity + High Priority | S4/P1 | Company name spelled wrong on the homepage | Cosmetic but visible to all users + brand risk |
-| Low Severity + Low Priority | S4/P4 | Misaligned icon in the admin panel | Nobody sees it, no functional impact |
-
-### Common Interview Trap
-
-"The login button is missing from the homepage."
-
-- Severity: Critical (core function completely broken — nobody can log in)
-- Priority: Critical (must fix immediately, blocks all users)
-
-"The 'About Us' page has a spelling mistake."
-
-- Severity: Trivial (no functional impact)
-- Priority: Medium or High (if the company is sensitive about brand reputation)
-
----
-
-## 10. Risk-Based Testing
-
-### Definition
-
-Risk-based testing prioritises testing effort based on the risk level of different parts of the system. You cannot test everything exhaustively — you test the most important things first.
-
-### Risk Formula
-
-```
-Risk = Probability of Failure × Impact of Failure
-     = Likelihood × Consequence
-```
-
-### Risk Assessment Process
-
-**Step 1: Identify risks**
-List all features and ask: "What could go wrong here?"
-
-**Step 2: Assess probability (likelihood)**
-
-| Level | Probability | Criteria |
-|---|---|---|
-| High | > 50% | New code, complex logic, lots of dependencies, inexperienced developer |
-| Medium | 20–50% | Modified code, moderate complexity |
-| Low | < 20% | Mature, stable, rarely changed code |
-
-**Step 3: Assess impact (consequence)**
-
-| Level | Impact | Criteria |
-|---|---|---|
-| High | Business critical | Revenue loss, legal risk, data loss, security breach |
-| Medium | Significant | Core feature degraded, many users affected |
-| Low | Minor | Cosmetic issue, few users, workaround available |
-
-**Step 4: Plot risk matrix**
-
-```
-         Impact
-          Low │ Med │ High
-         ─────┼─────┼─────
-    High │ Med │ High│ CRIT  ← Test these first and most thoroughly
-         ─────┼─────┼─────
-P   Med  │ Low │ Med │ High
-r        ─────┼─────┼─────
-o   Low  │ Low │ Low │ Med   ← Test these last, or not at all if time runs out
-b
-```
-
-**Step 5: Allocate test effort**
-- Critical risk areas: thorough testing, multiple techniques, automation
-- Medium risk: standard testing
-- Low risk: light testing or skip
-
-### Practical Example
-
-For an e-commerce application:
-
-| Feature | Probability | Impact | Risk Level | Testing Approach |
+| Layer | Count | Speed | Cost | Stability |
 |---|---|---|---|---|
-| Payment processing | High (new code) | High (revenue) | Critical | Full regression, edge cases, error paths |
-| Product search | Medium | High (user experience) | High | Functional + performance tests |
-| Admin reporting | Low (stable) | Medium | Medium | Basic functional tests |
-| Footer links | Low | Low | Low | Quick smoke check |
+| Unit | Many (60–70% of tests) | Milliseconds | Very cheap | Very stable |
+| API/Integration | Moderate (20–30%) | Seconds | Moderate | Stable |
+| UI/E2E | Few (5–10%) | Minutes | Expensive | Brittle |
+
+**The anti-pattern — "ice cream cone":** Heavy reliance on UI tests with few unit tests. This produces slow, flaky pipelines. Signs you have an ice cream cone: suite takes 2+ hours, tests fail for no apparent reason, every change breaks multiple tests.
+
+**Practical guidance for QA:**
+- Resist the temptation to test everything through the UI
+- Push coverage down to the API layer wherever the UI test is really just verifying business logic
+- UI tests should verify the user journey and visual integration, not every business rule
 
 ---
 
-## 11. Test Planning
+**Q6: What is the difference between functional and non-functional testing?**
 
-### What Goes in a Test Plan (IEEE 829 / ISTQB)
+**A:**
 
-A test plan is the master document that defines the entire testing effort. It answers: What, How, Who, When, Where.
+**Functional testing** tests what the system does — whether the features and business logic work correctly according to requirements.
 
-| Section | Content |
+| Examples | What is being tested |
 |---|---|
-| **1. Introduction / Purpose** | Why this document exists; project context |
-| **2. Test Scope** | What is in scope and what is explicitly out of scope |
-| **3. Test Objectives** | Goals of testing (find defects, gain confidence, provide info) |
-| **4. Test Strategy** | Test levels, types, techniques to be used |
-| **5. Entry and Exit Criteria** | Conditions to start and stop testing |
-| **6. Test Items** | Features/components under test |
-| **7. Features Not Tested** | Explicitly excluded items and reasons |
-| **8. Test Environment** | OS, browsers, devices, test data approach |
-| **9. Test Schedule** | Timeline, milestones, dependencies |
-| **10. Resources** | Team members, roles, responsibilities |
-| **11. Risks and Contingencies** | What could go wrong; mitigation plan |
-| **12. Deliverables** | Test cases, reports, defect logs to be produced |
-| **13. Approval** | Sign-off section |
+| User can log in with correct credentials | Login feature works |
+| Cart total updates when item is added | Calculation logic is correct |
+| Error message shown for invalid email | Input validation works |
+| API returns 200 with correct JSON for GET /users | API contract is met |
 
-### Entry and Exit Criteria Examples
+**Non-functional testing** tests how the system behaves, not what it does. It tests quality characteristics.
 
-**Entry Criteria (when to start testing):**
-- Build has been deployed to test environment
-- Smoke test passes (basic navigation works)
-- Test cases have been reviewed and approved
-- Test data is available
+| Type | What is being tested | Tools |
+|---|---|---|
+| Performance | Speed, throughput, response time under load | JMeter, k6, Gatling |
+| Security | Vulnerabilities, authentication, data protection | OWASP ZAP, Burp Suite |
+| Usability | Ease of use, accessibility, user experience | User testing, WCAG audit |
+| Reliability | Uptime, fault tolerance, recovery | Chaos engineering |
+| Compatibility | Works across browsers, OS, devices | BrowserStack, Selenium Grid |
+| Scalability | How well it handles growing load | Load testing at 2x, 5x scale |
+| Localisation | Correct language, date formats, currency | Manual + automation |
 
-**Exit Criteria (when to stop testing):**
-- 95% of test cases executed
-- No open Critical or High severity defects
-- Defect density below agreed threshold
-- Test coverage meets agreed percentage
+**Key interview point:** Functional testing verifies "it works." Non-functional testing verifies "it works well." Both are essential for a quality product.
 
 ---
 
-## 12. Exploratory vs Scripted Testing
+## SECTION 3: TESTING TYPES
+
+---
+
+**Q7: What is regression testing? When do you do it and what strategies exist?**
+
+**A:**
+
+Regression testing is the practice of re-running existing tests after code changes to ensure that previously working functionality has not been broken. Every change — a bug fix, a new feature, a refactor — carries the risk of introducing unintended side effects (regressions).
+
+**When to run regression tests:**
+- After every bug fix (did fixing bug A break something else?)
+- After every new feature is added
+- After refactoring or code restructuring
+- Before every release
+- Automatically on every commit (in a CI pipeline)
+
+**Regression testing strategies:**
+
+**Full regression:** Run every test in the entire suite.
+- Pro: Maximum coverage
+- Con: Slow; impractical for daily runs on large suites
+
+**Selective regression:** Run only tests related to changed code modules and their dependencies.
+- Pro: Faster; proportional to change scope
+- Con: Requires good traceability between tests, requirements, and code
+
+**Risk-based regression:** Prioritise tests by risk — always run high-risk tests, run medium-risk when time allows, skip low-risk until release.
+- Pro: Smart allocation of limited time
+- Con: Requires risk analysis before execution
+
+**Automated regression (in CI/CD):**
+- Smoke tests run on every commit (5–10 minutes)
+- Full regression runs nightly or on release branches (30–60 minutes)
+
+**Regression suite maintenance rules:**
+- Remove tests for deleted features
+- Update tests when requirements change
+- Fix or quarantine flaky tests monthly
+- Split the suite if it exceeds 30 minutes — parallelise it
+
+---
+
+**Q8: What is the difference between smoke testing and sanity testing? (Most frequently asked question)**
+
+**A:**
+
+This is asked in almost every QA interview. The two terms are often confused or used interchangeably, but they are distinct in purpose, scope, and timing.
+
+**Smoke Testing:**
+
+Smoke testing is a broad, shallow test of the most critical system functions. The goal is to answer: "Is the build stable enough to test further?" It does not test features in depth — it just checks that the application is up and running and the core paths work.
+
+- Also called: Build Verification Test (BVT)
+- Scope: Wide but shallow — touches many features briefly
+- Who runs it: QA (often automated in CI)
+- When: Immediately after a new build is deployed
+- Duration: 10–20 minutes
+- If smoke fails: The build is rejected immediately; no further testing proceeds
+
+**Smoke test examples:**
+- Application launches without error
+- Login page loads
+- User can log in with valid credentials
+- Dashboard is visible after login
+- API health endpoint returns 200
+- Database connection is established
+
+**Sanity Testing:**
+
+Sanity testing is a narrow, deep verification of a specific area that has just been changed or fixed. The goal is to answer: "Does this specific fix/change work correctly?" It is done after receiving a build with targeted changes.
+
+- Also called: Narrow regression
+- Scope: Narrow but deep — focuses on the changed area only
+- Who runs it: QA
+- When: After receiving a new build with specific bug fixes or changes
+- Duration: Varies (30 minutes to a few hours for the relevant module)
+- If sanity fails: This specific area needs rework; broader regression may or may not proceed
+
+**Sanity test examples:**
+- Login with uppercase email was fixed → verify login works with uppercase, lowercase, mixed case
+- Cart total calculation was fixed → verify all discount/tax/coupon combinations in the cart
+- API pagination was fixed → verify page 1, page 2, last page, empty page
+
+**Side-by-side comparison:**
+
+| Aspect | Smoke Testing | Sanity Testing |
+|---|---|---|
+| **Purpose** | Is the build stable? | Does this specific fix work? |
+| **Scope** | Wide, shallow | Narrow, deep |
+| **Coverage** | Many features briefly | One area thoroughly |
+| **When** | After every new build | After targeted fixes |
+| **Documentation** | Sometimes scripted, often automated | Usually undocumented (informal) |
+| **If it fails** | Build rejected; no further testing | Only the changed area needs rework |
+| **Analogy** | Checking if a car starts | Checking if the repaired brake works |
+
+**Memory trick:** Smoke = "Does the smoke detector beep?" (quick whole-system check). Sanity = "Are we sure this one thing makes sense?" (targeted deep check on the change).
+
+---
+
+**Q9: What is exploratory testing? How do you structure a session?**
+
+**A:**
+
+Exploratory testing means simultaneously designing and executing tests while learning about the system. Unlike scripted testing, there are no pre-written test cases to follow step by step. The tester uses skill, intuition, and domain knowledge to investigate areas that might have problems.
+
+**Definition (ISTQB):** "A type of experience-based testing in which the tester simultaneously designs and executes tests and uses information gained while testing to design new and better tests."
+
+**When exploratory testing is most valuable:**
+- New features with incomplete or evolving requirements
+- When you suspect something is wrong but automated tests pass
+- Usability and user experience assessment
+- Risk-based investigation of complex workflows
+- When a bug has been fixed and you want to probe the surrounding area
+
+**Session-Based Exploratory Testing (SBET) — the structured approach:**
+
+```
+1. MISSION / CHARTER
+   Define what you are exploring and why.
+   Example: "Explore the checkout flow focusing on discount code application,
+   particularly interactions between multiple codes and partial discounts"
+
+2. TIME-BOX
+   Typically 60–90 minutes per session.
+   Set a timer; do not extend the session.
+
+3. EXECUTE
+   - Start with the most likely risk areas
+   - Keep notes of what you tested, what you found, and questions raised
+   - Take screenshots of anything unusual
+   - Log defects immediately
+
+4. SESSION NOTES TEMPLATE
+   Charter: [Your mission]
+   Duration: 90 minutes
+   Tester: [Name]
+   Build: [Version]
+   Areas Tested: [Summary]
+   Bugs Found: [List with ticket numbers]
+   Issues/Questions: [Unresolved questions]
+   Observations: [Interesting behaviour worth monitoring]
+
+5. DEBRIEF
+   Brief the test lead/team on findings
+   Convert important discoveries to formal test cases
+   Flag risks for re-testing in the next session
+```
+
+**Exploratory vs Scripted testing:**
 
 | | Scripted Testing | Exploratory Testing |
 |---|---|---|
-| **Definition** | Test cases written in advance; executed step by step | Learning, designing, and executing tests simultaneously |
-| **Documentation** | Detailed test cases and procedures | Session notes, charters, time-boxed sessions |
-| **When to use** | Regression testing, compliance, UAT sign-off | New features, complex scenarios, finding unexpected bugs |
-| **Advantages** | Repeatable, measurable, coverage tracking | Fast, finds edge cases, tests human intuition |
-| **Disadvantages** | Misses unexpected defects, can become robotic | Hard to measure, depends on tester skill |
-| **Suitable for** | Automation | Skilled QA engineers |
-
-### Session-Based Exploratory Testing
-
-- **Charter**: A mission statement — "Explore the checkout flow with focus on edge cases in coupon code application"
-- **Time-box**: 60–90 minutes per session
-- **Notes**: Log what you tested, what you found, questions raised
-- **Debrief**: Report to lead; convert important findings to formal test cases
-
-### When to Use Each
-
-- Use **scripted** for regression packs, release sign-off, compliance testing, onboarding new testers
-- Use **exploratory** for new features, risk-based investigation, usability assessment, when requirements are incomplete
+| **Test cases** | Written in advance | Designed during execution |
+| **Documentation** | Detailed procedures | Session notes and charters |
+| **Coverage tracking** | Easy (test case execution %) | Hard to measure |
+| **Finding unexpected bugs** | Limited — only covers what was anticipated | Strong — tester follows their instincts |
+| **Best for** | Regression, compliance, onboarding | New features, complex areas, risk investigation |
 
 ---
 
-## 13. Regression Testing Strategy
-
-### What is Regression Testing?
-
-Re-running existing tests after code changes to ensure that previously working functionality still works. Changes introduce unintended side effects (regressions).
-
-### When to Regression Test
-
-- After every bug fix
-- After every new feature added
-- After every code refactor
-- Before every release
-
-### Regression Strategies
-
-**Full Regression**: Run every test in the suite.
-- Pro: Maximum coverage
-- Con: Slow and expensive; impractical daily
-
-**Selective Regression**: Run tests related to changed code.
-- Identify which modules changed
-- Run tests that cover those modules + their dependencies
-- Requires good traceability (test ↔ requirement ↔ code)
-
-**Risk-Based Regression**: Prioritise tests by risk score.
-- Always run Critical and High risk tests
-- Run Medium tests when time allows
-- Skip Low risk tests until release
-
-**Automated Regression**: The suite runs automatically in CI on every commit.
-- Smoke tests on every push (5–10 minutes)
-- Full regression nightly or on release branches (30–60 minutes)
-
-### Regression Test Suite Maintenance
-
-- Remove obsolete tests (features removed)
-- Update tests when requirements change
-- Review flaky tests monthly — fix or remove them
-- Track test execution time — split if > 30 minutes
+## SECTION 4: TEST DESIGN TECHNIQUES
 
 ---
 
-## 14. Performance Testing Concepts
+**Q10: What is the difference between verification and validation? Give examples.**
 
-### Types of Performance Tests
+**A:**
 
-| Type | Purpose | What You Measure |
+These two terms are foundational ISTQB concepts that are frequently confused.
+
+**Verification** asks: "Are we building the product right?"
+It checks whether the product conforms to its specification, standards, and design documents. Verification is done without actually running the software.
+
+**Validation** asks: "Are we building the right product?"
+It checks whether the product meets the actual needs of the user. Validation involves running and using the actual software.
+
+| Aspect | Verification | Validation |
 |---|---|---|
-| **Load Testing** | Verify the system handles expected user load | Response time, throughput, error rate at normal load |
-| **Stress Testing** | Find the breaking point of the system | Maximum load before failure; how it fails |
-| **Spike Testing** | Sudden large increase in users | System response to sudden traffic burst |
-| **Endurance (Soak) Testing** | System under sustained load over time | Memory leaks, resource degradation, performance drift |
-| **Volume Testing** | Large volumes of data | DB performance with millions of records |
-| **Scalability Testing** | How well the system scales | Performance at 2x, 5x, 10x load |
+| Question | "Are we building it right?" | "Are we building the right thing?" |
+| Focus | Process, documents, specifications | The actual running system |
+| Timing | Throughout development | Usually at the end of a phase |
+| Techniques | Reviews, walkthroughs, inspections, static analysis | Testing, demonstrations, user trials |
+| Example 1 | Reviewing the test plan against IEEE 829 standards | Running the application and executing tests |
+| Example 2 | Checking the API specification for completeness | Calling the API and verifying responses |
+| Example 3 | Reviewing requirements for ambiguity | Demonstrating the system to the client for approval |
+| Who | QA + developers + business analysts | QA + stakeholders + users |
 
-### Key Performance Metrics
+**Memory trick:** Verification = checking the Spec (both start with different letters but think V=Verify against specification). Validation = checking the Value to the user.
 
-| Metric | Definition | Acceptable Value (example) |
+---
+
+**Q11: What is equivalence partitioning? Give a real example with all partitions identified.**
+
+**A:**
+
+Equivalence partitioning (EP) is a black-box test design technique that divides possible input data into groups (partitions) where every value in the group is expected to behave identically. You test one representative value from each partition, dramatically reducing the number of test cases while maintaining coverage.
+
+**Why:** There is no value in testing every possible input if inputs in the same range produce the same behaviour. If `age=30` and `age=45` both produce "valid", testing both is redundant.
+
+**Rule:** One valid partition, one or more invalid partitions. Test exactly one value from each.
+
+**Example 1: Username field — must be 5–15 characters**
+
+| Partition | Range | Representative Value | Expected Result |
+|---|---|---|---|
+| Invalid — too short | 0–4 characters | 3 characters ("abc") | Error: "Username must be 5–15 characters" |
+| Valid | 5–15 characters | 10 characters ("johnsmith1") | Accepted |
+| Invalid — too long | 16+ characters | 20 characters ("johnnydoesmith2024") | Error: "Username must be 5–15 characters" |
+
+Minimum 3 test cases instead of testing every possible length.
+
+**Example 2: Age field for a loan application — only ages 18–65 qualify**
+
+| Partition | Range | Representative Value | Type |
+|---|---|---|---|
+| Invalid — underage | Below 18 | 15 | Invalid |
+| Valid | 18–65 | 35 | Valid |
+| Invalid — over retirement age | Above 65 | 70 | Invalid |
+
+**Example 3: HTTP status code handling**
+
+| Partition | Status Codes | Test Value | Expected Handling |
+|---|---|---|---|
+| Success | 200–299 | 200 | Process response body |
+| Redirection | 300–399 | 301 | Follow redirect |
+| Client error | 400–499 | 404 | Show "Not Found" message |
+| Server error | 500–599 | 500 | Show "Service unavailable" |
+
+**Key interview point:** EP reduces test count while ensuring each class of behaviour is covered. It does not guarantee edge-case coverage — that is why it is always combined with boundary value analysis.
+
+---
+
+**Q12: What is boundary value analysis? Give an exact example with all boundary values listed.**
+
+**A:**
+
+Boundary Value Analysis (BVA) is a black-box technique that focuses on the edges (boundaries) of equivalence partitions. Defects are statistically most likely to occur at the boundary between partitions — an off-by-one error in a condition like `if (age >= 18)` is a classic example.
+
+**BVA extends EP by testing at and around each boundary:**
+
+**2-value BVA:** Test the boundary itself and one value just outside (invalid side). More common in practice.
+
+**3-value BVA (ISTQB Foundation):** Test one value just below the boundary, the boundary itself, and one value just above. More thorough.
+
+**Full example: Discount applies if order total is £50–£200 (inclusive)**
+
+Boundaries: Lower boundary at £50. Upper boundary at £200.
+
+| Test Value | BVA Point | Expected Result |
 |---|---|---|
-| **Response Time** | Time from request sent to response received | < 2 seconds for 95th percentile |
-| **Throughput** | Requests processed per second | 1000 RPS for target load |
-| **Error Rate** | Percentage of requests that fail | < 0.1% |
-| **Concurrent Users** | Number of simultaneous users | 500 concurrent users |
-| **CPU Usage** | Server CPU during load | < 80% |
-| **Memory Usage** | RAM during load | Stable (not growing = no leak) |
-| **Latency** | Network delay | < 100ms |
-| **Apdex Score** | User satisfaction score (0–1) | > 0.9 |
+| £49 | Just below lower boundary | No discount |
+| £50 | At lower boundary (minimum valid) | Discount applies |
+| £51 | Just above lower boundary | Discount applies |
+| £100 | Midpoint (EP representative value) | Discount applies |
+| £199 | Just below upper boundary | Discount applies |
+| £200 | At upper boundary (maximum valid) | Discount applies |
+| £201 | Just above upper boundary | No discount |
 
-### Performance Testing Tools
+**Why test £51 and £199?** Because a developer might accidentally write `> 50` instead of `>= 50`, or `< 200` instead of `<= 200`. The values just inside the boundary catch these off-by-one errors.
 
-| Tool | Use |
+**Example: Password field — must be 8–20 characters**
+
+| Value | BVA Point | Expected |
+|---|---|---|
+| 7 chars | Below minimum | Error |
+| 8 chars | At minimum | Accepted |
+| 9 chars | Just above minimum | Accepted |
+| 14 chars | Midpoint (EP value) | Accepted |
+| 19 chars | Just below maximum | Accepted |
+| 20 chars | At maximum | Accepted |
+| 21 chars | Just above maximum | Error |
+
+7 test cases cover all important boundary behaviour.
+
+**EP + BVA together:** Use EP first to identify the partitions. Then apply BVA at the boundary of each partition. They complement each other perfectly.
+
+---
+
+**Q13: What is decision table testing? Show a complete real-world example.**
+
+**A:**
+
+Decision table testing is a black-box technique for systematically testing combinations of conditions. It is most effective when the system has multiple input conditions that each independently affect the output, and different combinations lead to different actions.
+
+**When to use:** Pricing rules, discount logic, permission systems, login workflows, loan approval systems.
+
+**Construction steps:**
+1. Identify all conditions (inputs)
+2. Identify all actions (outputs/outcomes)
+3. List all possible combinations of conditions
+4. For each combination, determine the action
+5. Each column in the table becomes one test case
+
+**Example: Online loan approval**
+
+Conditions:
+- Credit score: Good or Poor
+- Annual income: Above £30k or Below £30k
+- Has collateral: Yes or No
+
+With 3 binary conditions: 2³ = 8 possible combinations.
+
+| | T1 | T2 | T3 | T4 | T5 | T6 | T7 | T8 |
+|---|---|---|---|---|---|---|---|---|
+| Credit score | Good | Good | Good | Good | Poor | Poor | Poor | Poor |
+| Income ≥ £30k | Yes | Yes | No | No | Yes | Yes | No | No |
+| Has collateral | Yes | No | Yes | No | Yes | No | Yes | No |
+| **Action** | **Approve** | **Approve** | **Approve** | **Reject** | **Approve** | **Review** | **Review** | **Reject** |
+
+Each column is one test case. This gives you 8 tests that cover every possible combination.
+
+**Collapsed decision table (merge equivalent rules):**
+
+If rules T1, T2, T3 all result in Approve and the third condition (collateral) does not matter, you can collapse them:
+
+| | T1-3 (collapsed) | T4 | T5 | T6 | T7 | T8 |
+|---|---|---|---|---|---|---|
+| Credit score | Good | Good | Poor | Poor | Poor | Poor |
+| Income ≥ £30k | - (any) | No | Yes | Yes | No | No |
+| Has collateral | - (any) | No | Yes | No | Yes | No |
+| **Action** | **Approve** | **Reject** | **Approve** | **Review** | **Review** | **Reject** |
+
+**Real QA application:**
+
+```
+Feature: Shopping cart discount
+Conditions:
+  - Is a Premium member?   (Yes/No)
+  - Order total > £100?    (Yes/No)
+  - Has valid coupon code? (Yes/No)
+
+| | T1 | T2 | T3 | T4 | T5 | T6 | T7 | T8 |
+|-|----|----|----|----|----|----|----|----|
+| Premium member | Y | Y | Y | Y | N | N | N | N |
+| Order > £100   | Y | Y | N | N | Y | Y | N | N |
+| Valid coupon   | Y | N | Y | N | Y | N | Y | N |
+| Discount       | 25% | 20% | 15% | 10% | 15% | 10% | 5% | 0% |
+```
+
+Each column is one automated test case with that exact combination of inputs.
+
+---
+
+**Q14: What is state transition testing? Give an example with a state diagram.**
+
+**A:**
+
+State transition testing is a black-box technique used when the system can exist in different states, and events (inputs/actions) cause transitions between states. It is used to verify that the system responds correctly to valid transitions and correctly rejects invalid ones.
+
+**When to use:** Order lifecycle, booking systems, user account status, workflow approval processes, ATM state machine.
+
+**Example: Online order lifecycle**
+
+States: Created, Paid, Shipped, Delivered, Cancelled, Returned
+
+Events: Pay, Ship, Deliver, Cancel, Return
+
+```
+[Created] ---pay---> [Paid] ---ship---> [Shipped] ---deliver---> [Delivered]
+    |                  |                    |
+    |---cancel--> [Cancelled]  ---cancel--> [Cancelled]
+                                   |---return---> [Returned]
+```
+
+**State transition table:**
+
+| Current State | Event | Next State | Action Taken |
+|---|---|---|---|
+| Created | Pay | Paid | Send payment confirmation email |
+| Created | Cancel | Cancelled | Send cancellation; release inventory |
+| Created | Ship | ERROR | Invalid — cannot ship unpaid order |
+| Paid | Ship | Shipped | Send tracking number |
+| Paid | Cancel | Cancelled | Issue refund; release inventory |
+| Paid | Pay | ERROR | Invalid — already paid |
+| Shipped | Deliver | Delivered | Send delivery confirmation |
+| Shipped | Return | Returned | Initiate return process |
+| Delivered | Return | Returned | Open return case |
+| Cancelled | Pay | ERROR | Cannot pay cancelled order |
+| Returned | — | — | Terminal state |
+
+**Tests to derive:**
+1. Happy path: Created → Paid → Shipped → Delivered
+2. Cancellation from Created state
+3. Cancellation from Paid state (verify refund is issued)
+4. Return from Shipped state
+5. Invalid transition: attempt to ship a Created (unpaid) order — verify rejection
+6. Invalid transition: attempt to pay a Cancelled order — verify rejection
+
+**Coverage levels (ISTQB):**
+- All states covered (visit every state at least once)
+- All transitions covered (exercise every arrow at least once)
+- All transition pairs covered (every sequence of two transitions)
+
+---
+
+**Q15: What is use case testing?**
+
+**A:**
+
+Use case testing derives test cases from use cases — descriptions of how a user interacts with the system to achieve a goal. Each use case has a basic flow (happy path), alternative flows (valid variations), and exception flows (errors and edge cases).
+
+**Use case: User checks out a shopping cart**
+
+Basic flow (happy path):
+1. User views cart with items
+2. User enters shipping address
+3. User selects delivery option
+4. User enters payment details
+5. User clicks "Place Order"
+6. System confirms order and sends confirmation email
+
+Alternative flows:
+- ALT1: User applies a valid discount code before payment
+- ALT2: User changes the shipping address on the payment page
+- ALT3: User removes an item from the cart during checkout
+
+Exception flows:
+- EXC1: Payment is declined → show error, allow retry with different card
+- EXC2: Item goes out of stock during checkout → notify user, offer alternatives
+- EXC3: Session times out → redirect to login, preserve cart
+- EXC4: Shipping address is in a non-supported region → show unavailability message
+
+**Derived test cases:**
+- TC01: Complete checkout with valid card (basic flow)
+- TC02: Apply valid coupon → verify discount applied → complete checkout (ALT1)
+- TC03: Enter declined card → verify error message → enter valid card → complete checkout (EXC1)
+- TC04: Add item, remove it during checkout, verify cart updates → complete checkout (ALT3)
+- TC05: Complete checkout, verify confirmation email is received (basic flow + post-condition)
+
+**Use case testing is particularly effective because it tests the system from the user's perspective rather than testing individual functions in isolation.**
+
+---
+
+**Q16: What is statement coverage, branch coverage, and path coverage? How do they differ?**
+
+**A:**
+
+These are white-box testing coverage criteria that measure how much of the source code is exercised by your tests.
+
+**Statement Coverage (Line Coverage)**
+
+Goal: Every executable statement is executed at least once.
+
+```java
+public String classify(int n) {
+    String result = "zero";              // Line 1 — always runs
+    if (n > 0) {                         // Line 2 — decision
+        result = "positive";             // Line 3 — only if n > 0
+    }
+    if (n < 0) {                         // Line 4 — decision
+        result = "negative";             // Line 5 — only if n < 0
+    }
+    return result;                       // Line 6 — always runs
+}
+```
+
+To achieve 100% statement coverage:
+- Test with n=5 → executes lines 1, 2, 3, 4, 6 (misses line 5)
+- Test with n=-3 → executes lines 1, 2, 4, 5, 6 (misses line 3)
+
+Two tests: n=5 and n=-3 achieve 100% statement coverage but miss n=0.
+
+**Branch Coverage (Decision Coverage)**
+
+Goal: Every branch (true AND false) of every decision point is executed at least once.
+
+For the example above, branch coverage requires:
+- `n > 0` is TRUE (line 3 executes) AND FALSE (line 3 skipped)
+- `n < 0` is TRUE (line 5 executes) AND FALSE (line 5 skipped)
+
+Three tests needed:
+- n=5 → `n>0` TRUE, `n<0` FALSE
+- n=-3 → `n>0` FALSE, `n<0` TRUE
+- n=0 → both FALSE (would have been missed by statement coverage)
+
+**Branch coverage is stronger than statement coverage.** 100% branch coverage implies 100% statement coverage, but not vice versa.
+
+**Path Coverage**
+
+Goal: Every unique execution path through the code is executed.
+
+The number of paths grows exponentially with conditions. For the example: 4 paths (TT, TF, FT, FF). In complex code this becomes impractical.
+
+Used in: safety-critical systems (aviation, medical devices).
+
+**Cyclomatic Complexity (McCabe)**
+
+Measures the number of linearly independent paths through the code:
+```
+CC = Number of decision points + 1
+
+For the example above:
+  Decision points: 2 (two if statements)
+  CC = 2 + 1 = 3
+
+CC also = minimum number of tests for branch coverage
+```
+
+| CC Value | Risk Level | Action |
+|---|---|---|
+| 1–5 | Simple, low risk | Normal testing |
+| 6–10 | Moderate | Consider refactoring |
+| > 10 | High complexity, high risk | Must refactor; thoroughly test |
+
+---
+
+**Q17: How do you measure code coverage in a Java project? Give the tooling and a real example.**
+
+**A:**
+
+Code coverage is measured by running your test suite with a coverage agent that tracks which lines, branches, and methods are executed.
+
+**Tool: JaCoCo (Java Code Coverage)**
+
+JaCoCo is the standard coverage tool for Java/Maven projects.
+
+**pom.xml configuration:**
+
+```xml
+<build>
+    <plugins>
+        <plugin>
+            <groupId>org.jacoco</groupId>
+            <artifactId>jacoco-maven-plugin</artifactId>
+            <version>0.8.11</version>
+            <executions>
+                <!-- Attach JaCoCo agent before tests run -->
+                <execution>
+                    <id>prepare-agent</id>
+                    <goals><goal>prepare-agent</goal></goals>
+                </execution>
+                <!-- Generate report after tests finish -->
+                <execution>
+                    <id>report</id>
+                    <phase>test</phase>
+                    <goals><goal>report</goal></goals>
+                </execution>
+                <!-- Enforce minimum coverage threshold (build fails if not met) -->
+                <execution>
+                    <id>check</id>
+                    <goals><goal>check</goal></goals>
+                    <configuration>
+                        <rules>
+                            <rule>
+                                <element>BUNDLE</element>
+                                <limits>
+                                    <limit>
+                                        <counter>INSTRUCTION</counter>
+                                        <value>COVEREDRATIO</value>
+                                        <minimum>0.80</minimum>  <!-- 80% instruction coverage required -->
+                                    </limit>
+                                    <limit>
+                                        <counter>BRANCH</counter>
+                                        <value>COVEREDRATIO</value>
+                                        <minimum>0.70</minimum>  <!-- 70% branch coverage required -->
+                                    </limit>
+                                </limits>
+                            </rule>
+                        </rules>
+                    </configuration>
+                </execution>
+            </executions>
+        </plugin>
+    </plugins>
+</build>
+```
+
+**Run and view coverage:**
+
+```bash
+# Run tests and generate coverage report
+mvn test
+
+# Report generated at: target/site/jacoco/index.html
+# Open in browser to see coverage by class, method, line, and branch
+```
+
+**Coverage report output example:**
+
+```
+Class: OrderService
+  Instructions: 85% (170/200 covered)
+  Branches:     75% (18/24 covered)
+  Methods:      100% (12/12 covered)
+  Lines:        90% (54/60 covered)
+
+Uncovered branches in method: calculateShipping()
+  Line 45: if (isInternational) -- FALSE branch not tested
+  Line 67: if (weight > 50) -- TRUE branch not tested
+```
+
+**In CI/CD pipeline:**
+
+```groovy
+// Jenkinsfile — enforce coverage threshold
+stage('Code Coverage') {
+    steps {
+        sh 'mvn jacoco:check'   // Fails build if coverage is below threshold
+    }
+    post {
+        always {
+            publishHTML([
+                reportDir: 'target/site/jacoco',
+                reportFiles: 'index.html',
+                reportName: 'JaCoCo Coverage Report'
+            ])
+        }
+    }
+}
+```
+
+---
+
+## SECTION 5: DEFECT MANAGEMENT
+
+---
+
+**Q18: What is the defect lifecycle? Walk through all states and who is responsible for each.**
+
+**A:**
+
+The defect lifecycle (also called bug lifecycle) tracks a defect from discovery to resolution. Different organisations use slightly different states, but the core flow is consistent.
+
+**Full defect lifecycle:**
+
+```
+          [New] ──────────────────────────────────────┐
+            |                                         |
+            v                                         v
+       [Assigned]                               [Rejected]
+            |                                    (not a bug /
+            v                                    cannot reproduce /
+          [Open]                                 works as designed)
+            |
+       ┌────┴────┐
+       v         v
+  [Deferred]  [Fixed]
+  (known, not   |
+  fixing now)   v
+              [Retest]
+                |
+          ┌─────┴─────┐
+          v           v
+       [Closed]   [Reopened] ──> [Open]
+```
+
+**State descriptions:**
+
+| State | Description | Responsible |
+|---|---|---|
+| **New** | QA has logged the defect; it has not been reviewed yet | QA |
+| **Assigned** | The defect has been allocated to a developer for investigation | Lead / PM |
+| **Open** | Developer has accepted the defect and is working on a fix | Developer |
+| **Fixed** | Developer has applied the fix and deployed to the test environment | Developer |
+| **Retest** | QA is verifying that the fix resolves the defect | QA |
+| **Closed** | QA verified the fix; defect is resolved | QA only |
+| **Reopened** | QA retested and the defect is still present; fix did not work | QA only |
+| **Deferred** | Acknowledged as a real bug but will not be fixed in this release | PM / Lead |
+| **Rejected** | Determined not to be a defect (works as designed, duplicate, cannot reproduce) | Developer / Lead |
+| **Duplicate** | Same defect as an existing open ticket; this copy is closed | QA / Lead |
+
+**Critical rules:**
+- **Only QA closes a defect** — never the developer who fixed it
+- **Only QA reopens a defect** — after failed retest with evidence (screenshot, steps)
+- **Deferred ≠ Closed** — a deferred defect still exists; it just will not be fixed now
+- **Rejected requires a reason** — QA may escalate if they disagree with the rejection
+
+**What makes a good defect report:**
+
+```
+Title:       "Checkout fails when applying two coupon codes simultaneously — total not recalculated"
+             (NOT: "Coupon doesn't work")
+
+Environment: Chrome 124, Windows 11, Staging URL: https://staging.myapp.com
+Build:       v2.3.1-build-456
+
+Steps to Reproduce:
+1. Add 3 items to cart (total: £85.00)
+2. Apply coupon code "SAVE10" → total becomes £76.50 ✓
+3. Apply coupon code "MEMBER5" → total should become £72.68
+4. Observe: total remains £76.50; second coupon is accepted but not applied
+
+Expected: Total = £72.68 (10% + 5% stacked discounts applied)
+Actual:   Total = £76.50 (only first coupon applied)
+
+Severity: Major
+Priority: High
+
+Attachments: screenshot_01.png, console_errors.txt
+```
+
+---
+
+**Q19: What is the difference between severity and priority? Give examples of all four combinations.**
+
+**A:**
+
+**Severity:** The technical impact of the defect on the system. "How badly does this break the system?" Set by QA.
+
+**Priority:** The business urgency of fixing the defect. "How quickly must this be fixed?" Set by Product Manager / Business.
+
+These are independent of each other. A cosmetic defect can be high priority if it affects brand reputation. A catastrophic crash can be low priority if it only affects a rarely-used feature.
+
+**Severity levels:**
+
+| Level | Description | Example |
+|---|---|---|
+| Critical (S1) | System is unusable; core function completely broken; data loss | Payment API crashes; login doesn't work for anyone; data is deleted |
+| Major (S2) | Major feature is broken; workaround exists | PDF export fails; search returns wrong results |
+| Minor (S3) | Feature works with minor issues | Dropdown alphabetical order wrong; tooltip text incorrect |
+| Trivial (S4) | Cosmetic; no functional impact | Button misaligned by 2px; wrong shade of grey |
+
+**Priority levels:**
+
+| Level | Description | Example |
+|---|---|---|
+| P1 - Critical | Fix immediately; blocks release | Homepage shows 500 error |
+| P2 - High | Fix in current sprint | Core workflow broken for many users |
+| P3 - Medium | Fix in near-term release | Non-critical feature partially broken |
+| P4 - Low | Fix when time permits | Minor cosmetic defect in admin panel |
+
+**The 4 classic combinations:**
+
+**High Severity + High Priority (S1/P1):**
+The payment gateway is completely down — no customer can complete a purchase.
+- Severity: Critical (core function broken, revenue loss)
+- Priority: Critical (must fix right now — every minute costs money)
+
+**High Severity + Low Priority (S1/P4):**
+The legacy batch report export crashes the system — but it only runs once a month and only one internal accountant uses it.
+- Severity: Critical (system crashes when the feature is used)
+- Priority: Low (almost nobody uses it; fix can wait until next sprint)
+
+**Low Severity + High Priority (S4/P1):**
+The company's name is spelled "Amazone" instead of "Amazon" on the homepage hero banner.
+- Severity: Trivial (no functional impact at all)
+- Priority: Critical (visible to every user; brand reputation; fix immediately)
+
+**Low Severity + Low Priority (S4/P4):**
+An icon in the internal admin panel is 3 pixels off-centre.
+- Severity: Trivial (cosmetic only)
+- Priority: Low (almost no one sees it; fix whenever convenient)
+
+**Interview trick question:** "The login button is missing from the homepage."
+- Severity: Critical (no user can log in — core function completely broken)
+- Priority: Critical (affects every user immediately — fix now)
+
+---
+
+**Q20: What is a bug escape? How do you prevent it?**
+
+**A:**
+
+A bug escape (also called defect leakage) is a defect that was not found during testing and was discovered by end users in production.
+
+**Why bug escapes happen:**
+- Insufficient test coverage (area was not tested)
+- Risk was misjudged (the area was deprioritised)
+- Edge case was not identified (unusual combination of inputs)
+- Defect was introduced after testing was complete (late code change)
+- Test data did not match real-world data
+- Environment differences (production config differs from test config)
+- Regression gap (fix for one bug introduced a new one in an untested area)
+
+**Metrics to measure bug escapes:**
+
+```
+Defect Escape Rate = (Defects found in production / Total defects found) × 100
+
+Example: 5 production bugs / 100 total bugs × 100 = 5% escape rate
+
+Defect Removal Efficiency (DRE) = (Defects found before release / Total defects) × 100
+                                 = (95 / 100) × 100 = 95% DRE
+```
+
+Higher DRE and lower escape rate = more effective testing.
+
+**Prevention strategies:**
+
+1. **Risk-based testing** — allocate most effort to highest-risk areas so coverage is proportional to risk
+2. **Exploratory testing** — scripted tests miss unexpected scenarios; exploratory finds edge cases
+3. **Code coverage gates** — enforce minimum branch coverage so untested code cannot be merged
+4. **Production-like test data** — use anonymised real data in testing, not just "happy path" data
+5. **Regression automation** — automated regression catches regressions from every code change
+6. **Three Amigos** — QA identifies test conditions before coding begins, not after
+7. **Shift-left** — test earlier; review requirements; find defects before they are coded
+8. **Post-release monitoring** — track production errors; correlate with test gaps; update test suite
+9. **Root cause analysis** — when an escape occurs, ask "what test should have caught this?" and add it
+
+---
+
+## SECTION 6: RISK AND TEST PLANNING
+
+---
+
+**Q21: What is risk-based testing? How do you prioritise your test effort when time is limited?**
+
+**A:**
+
+Risk-based testing prioritises the test effort based on the risk level of different parts of the system. It acknowledges that exhaustive testing is impossible — you cannot test every combination of inputs — so you must make smart decisions about what to test first and most thoroughly.
+
+**Risk formula:**
+
+```
+Risk = Probability of Failure × Impact of Failure
+
+High probability + High impact = Critical risk (test first and most thoroughly)
+Low probability + Low impact  = Minimal risk (test last or skip if time runs out)
+```
+
+**Step-by-step risk assessment process:**
+
+**Step 1: List features/areas**
+
+```
+- User login
+- Payment processing
+- Product search
+- Admin reporting
+- Footer links
+- User profile update
+- Email notifications
+```
+
+**Step 2: Score probability of failure (1–3 scale)**
+
+| Score | Meaning | Indicators |
+|---|---|---|
+| 3 - High | Likely to fail | New code, complex logic, many dependencies, new developer |
+| 2 - Medium | Might fail | Modified existing code, moderate complexity |
+| 1 - Low | Unlikely to fail | Stable, mature, unchanged for 6+ months |
+
+**Step 3: Score impact of failure (1–3 scale)**
+
+| Score | Meaning | Indicators |
+|---|---|---|
+| 3 - High | Business critical | Revenue loss, legal risk, data loss, security |
+| 2 - Medium | Significant impact | Core feature degraded, many users affected |
+| 1 - Low | Minor | Cosmetic issue, few users, easy workaround |
+
+**Step 4: Calculate and rank**
+
+| Feature | Probability | Impact | Risk Score | Test Priority |
+|---|---|---|---|---|
+| Payment processing | 3 (new) | 3 (revenue) | 9 | CRITICAL — test first, thoroughly |
+| User login | 2 (modified) | 3 (everyone needs it) | 6 | HIGH |
+| Product search | 2 (modified) | 2 (UX impact) | 4 | MEDIUM |
+| User profile update | 1 (stable) | 2 (moderate) | 2 | LOW |
+| Admin reporting | 1 (stable) | 1 (few users) | 1 | MINIMAL — skip if time runs out |
+| Footer links | 1 (unchanged) | 1 (cosmetic) | 1 | MINIMAL |
+
+**Step 5: Allocate test effort proportionally**
+- Critical (score 8–9): Full testing, multiple techniques, automation, exploratory
+- High (score 5–7): Standard functional testing + key boundary values
+- Medium (score 3–4): Basic positive and negative tests
+- Low (score 1–2): Quick smoke check or skip
+
+---
+
+**Q22: What is a test plan? What sections does it contain?**
+
+**A:**
+
+A test plan is the master document that defines the entire testing effort for a project or release. It answers: What will be tested, how, by whom, when, and with what resources. It serves as the contract between QA and stakeholders.
+
+**Test plan sections (based on IEEE 829 / ISTQB):**
+
+| Section | Content |
 |---|---|
-| Apache JMeter | Load testing; simulates hundreds of concurrent users |
-| k6 | Modern scripting-based load testing; great for CI |
-| Gatling | Scala-based; high performance; code-as-config |
-| Locust | Python-based; easy scripting |
-| Playwright/Selenium | Not suitable for load testing |
+| 1. Introduction / Purpose | Why this test plan exists; project name; version; references |
+| 2. Scope of Testing | What IS being tested (in scope) and what is NOT being tested (out of scope) — both must be explicit |
+| 3. Test Objectives | Goals: find defects, gain confidence, comply with regulation, verify requirements |
+| 4. Test Strategy | Test levels (unit/integration/system), test types (functional/performance), techniques (EP, BVA), tools |
+| 5. Entry and Exit Criteria | Conditions for starting testing; conditions for stopping |
+| 6. Test Items | Specific features, modules, or requirements under test |
+| 7. Features Not Tested | Explicitly excluded features with reasons (out of scope, not yet built, separate team) |
+| 8. Test Environment | Browsers, OS, devices, test servers, database setup, test data approach |
+| 9. Test Schedule | Start date, end date, milestones, dependencies |
+| 10. Resources and Roles | Team members, responsibilities (who writes cases, who executes, who reviews) |
+| 11. Risks and Contingencies | What could go wrong (unstable environment, resource shortage); mitigation plan |
+| 12. Deliverables | What QA will produce: test cases, defect report, test summary report |
+| 13. Approval | Sign-off section with names and dates |
 
-### Load Testing Terminology
+**Entry and Exit Criteria examples:**
 
-- **Virtual User (VU)**: A simulated user performing actions
-- **Ramp-up**: Gradually increasing users (prevents sudden overload)
-- **Steady State**: Period at full load being observed
-- **Ramp-down**: Gradually decreasing users
-- **Think Time**: Simulated pause between user actions
+```
+Entry Criteria (when to START testing):
+- Build has been deployed to test environment
+- Smoke test passes (application loads and basic navigation works)
+- Test cases have been written, reviewed, and approved
+- Test data is set up and accessible
+- No critical-priority open defects from previous sprint
+
+Exit Criteria (when to STOP testing and sign off):
+- 95% or more of planned test cases have been executed
+- 100% of Critical and High severity defects are closed
+- No more than 5% open Minor or Trivial defects
+- Test coverage meets 80% (as measured by requirements coverage)
+- Test summary report written and reviewed
+```
 
 ---
 
-## 15. Non-Functional Testing Types
-
-| Type | What It Tests | Tools/Methods |
-|---|---|---|
-| **Performance** | Speed, scalability, stability under load | JMeter, k6, Gatling |
-| **Security** | Vulnerabilities, authentication, data protection | OWASP ZAP, Burp Suite, manual pen testing |
-| **Usability** | User experience, ease of use, accessibility | User testing sessions, heuristic evaluation |
-| **Accessibility** | WCAG compliance, screen reader support | Axe, Wave, manual with NVDA |
-| **Compatibility** | Works on different browsers/OS/devices | BrowserStack, Selenium grid |
-| **Reliability** | Uptime, fault tolerance, recovery | Chaos engineering, endurance tests |
-| **Maintainability** | Code quality, documentation | SonarQube, code review |
-| **Portability** | Works across environments | Environment testing |
-| **Localisation** | Correct language, date/number formats | Manual + automation |
-| **Compliance** | Meets legal/regulatory standards | Audit against standards (GDPR, PCI-DSS) |
+## SECTION 7: TEST METRICS
 
 ---
 
-## 16. Test Metrics
+**Q23: What are test metrics? List and explain the most important ones.**
 
-Metrics enable measurement of testing quality, progress, and effectiveness.
+**A:**
 
-### Defect Metrics
+Test metrics are quantitative measures of the testing process that help teams understand quality, progress, and effectiveness. Without metrics, QA status is just opinion.
 
-**Defect Density**
-```
-Defect Density = Number of Defects / Size of Component
-              = 15 defects / 1000 lines of code
-              = 0.015 defects per LOC
-```
-Lower is better. Used to compare component quality.
+**Defect-based metrics:**
 
-**Defect Removal Efficiency (DRE)**
+**Defect Density:**
 ```
-DRE = (Defects found before release / Total defects) × 100
-    = (90 / 100) × 100 = 90%
-```
-Measures how effective testing was at finding defects before users do.
+Defect Density = Number of Defects Found / Size of Component
 
-**Defect Leakage Rate**
-```
-Defect Leakage = (Defects found in production / Total defects found) × 100
-               = (10 / 100) × 100 = 10%
-```
-Lower is better.
+Example: 15 defects / 5,000 lines of code = 3 defects per KLOC
 
-**Mean Time to Fix (MTTF)**
+Lower is better. Compare components to identify the most defect-prone areas.
+Used to decide where to focus testing effort.
+```
+
+**Defect Removal Efficiency (DRE):**
+```
+DRE = (Defects found before production / Total defects) × 100
+
+Example: 90 found in testing, 10 escaped to production
+DRE = (90 / 100) × 100 = 90%
+
+Higher is better. World-class teams target > 95% DRE.
+```
+
+**Defect Escape Rate / Defect Leakage:**
+```
+Defect Leakage = (Defects found in production / Total defects) × 100
+
+Example: 10 production bugs / 100 total bugs = 10% leakage
+
+Lower is better. This is the complement of DRE.
+```
+
+**Mean Time to Fix:**
 ```
 MTTF = Total fix time for all defects / Number of defects fixed
-     = 300 hours / 30 defects = 10 hours/defect
+
+Example: 300 hours / 30 defects = 10 hours per defect average
+
+Measures how quickly the development team resolves defects.
 ```
 
-### Test Coverage Metrics
+**Test execution metrics:**
 
-**Test Case Pass Rate**
+**Test Pass Rate:**
 ```
 Pass Rate = (Tests Passed / Tests Executed) × 100
-          = (180 / 200) × 100 = 90%
+
+Example: 180 passed / 200 executed × 100 = 90% pass rate
 ```
 
-**Test Execution Progress**
+**Test Execution Progress:**
 ```
 Execution % = (Tests Executed / Total Tests Planned) × 100
+
+Use to show sprint or release progress to stakeholders.
 ```
 
-**Requirements Coverage**
+**Requirements Coverage:**
 ```
-Coverage = (Requirements with test cases / Total requirements) × 100
+Requirements Coverage = (Requirements with test cases / Total requirements) × 100
+
+Example: 80 requirements have test cases / 100 total requirements = 80% coverage
+
+Ensures no requirement is left untested.
 ```
 
-### Other Important Metrics
+**Automation metrics:**
 
-| Metric | Formula | Purpose |
+**Automation Coverage:**
+```
+Automation Coverage = (Automated test cases / Total test cases) × 100
+
+Measures the maturity of the automation programme.
+Target: 70–80% of regression suite automated.
+```
+
+**Reporting metrics to stakeholders:**
+
+Always show trends, not just snapshots:
+
+```
+"Pass rate is 90% this week, up from 85% last week.
+ We need 95% to meet our release exit criteria.
+ At the current improvement rate, we will hit the threshold by Thursday."
+```
+
+A single number without context is meaningless. Trend + target + projection is what stakeholders need.
+
+---
+
+**Q24: What is defect density and how do you use it?**
+
+**A:**
+
+Defect density measures how many defects exist per unit of code (usually per 1,000 lines of code — KLOC).
+
+```
+Defect Density = Total defects found / Size of the module or system
+
+Common size measures:
+  - Lines of code (KLOC = 1,000 lines)
+  - Function points
+  - Number of requirements
+
+Example:
+  Module A: 35 defects / 7,000 LOC = 5 defects/KLOC   ← HIGH RISK
+  Module B: 10 defects / 8,000 LOC = 1.25 defects/KLOC ← LOW RISK
+```
+
+**How QA uses defect density:**
+- Identify which modules are the most defect-prone → allocate more testing effort there
+- Compare current release density to historical data → is quality improving or degrading?
+- Justify testing effort to management with data: "Module A has 4x the density of Module B"
+- Set a threshold: builds with density > 8 defects/KLOC do not proceed to UAT
+
+---
+
+## SECTION 8: AGILE TESTING
+
+---
+
+**Q25: What is the Three Amigos meeting? What does QA contribute?**
+
+**A:**
+
+The Three Amigos is a technique where three perspectives collaboratively review each user story before development begins. The "three amigos" are:
+
+**1. Product Owner (Business perspective):** "This is what I want and why it has business value."
+
+**2. Developer (Technical perspective):** "This is how I plan to build it and what constraints exist."
+
+**3. QA (Testing perspective):** "This is how I will verify it — and here are the edge cases none of you have thought of."
+
+**The goal:** Shared understanding. All three parties agree on requirements, scope, acceptance criteria, and edge cases before a single line of code is written.
+
+**What QA specifically contributes to Three Amigos:**
+
+- Boundary values: "What happens if quantity is 0? Or negative? Or 9,999?"
+- Negative scenarios: "What if the user has no payment method saved?"
+- Error handling: "What is the behaviour when the payment API is down?"
+- Permissions: "Can a regular user access this? What about an admin?"
+- Non-functional concerns: "How many concurrent users will this support?"
+- Integration questions: "Does this affect the notification service?"
+- Acceptance criteria review: "How do we know this story is done?"
+
+**Three Amigos prevents the most expensive type of defect: requirements ambiguity.** A misunderstood requirement that gets coded, tested, and deployed can cost 100x more to fix than clarifying it in a 30-minute meeting.
+
+---
+
+**Q26: What is shift-left testing? Why does it matter?**
+
+**A:**
+
+Shift-left testing means moving testing activities earlier in the development lifecycle — toward the "left" on a project timeline. Traditional development had testing as the last phase; shift-left integrates QA from the very beginning.
+
+**Traditional vs shift-left:**
+
+```
+Traditional (shift-RIGHT):
+Requirements → Design → Code → [TEST] → Deploy
+                              ↑
+                       QA gets involved here only
+
+Shift-LEFT:
+[QA] → Requirements → [QA] → Design → [QA] → Code → [QA] → Test → Deploy
+  ↑                     ↑               ↑                ↑
+Review req.        Review design    Write tests      Execute tests
+for ambiguity      for testability  before code      in CI pipeline
+```
+
+**Why shift-left matters — defect cost multiplier:**
+
+| When defect is found | Relative cost to fix |
+|---|---|
+| Requirements phase | 1x |
+| Design phase | 5x |
+| Implementation phase | 10x |
+| Testing phase | 20x |
+| Production (post-release) | 100x |
+
+**How QA shifts left in practice:**
+- Attend sprint planning and backlog refinement to understand stories before development
+- Participate in Three Amigos meetings to define acceptance criteria
+- Write test conditions while requirements are being written — before code
+- Review API contract designs before implementation
+- Define test data needs before the sprint starts
+- Write automation framework code alongside development
+- Run tests in CI so every commit gets immediate feedback
+
+**Shift-left is not about QA doing developer work** — it is about QA's knowledge of edge cases, error scenarios, and quality concerns informing the development process from the start.
+
+---
+
+**Q27: What is agile testing? How does QA fit into a Scrum team?**
+
+**A:**
+
+Agile testing is testing within an agile development framework. Rather than testing being a separate phase after coding, testing is integrated throughout each sprint. QA is a full team member, not a downstream consumer of finished code.
+
+**QA's role in a Scrum sprint:**
+
+```
+Sprint Planning (Day 1):
+  QA attends; reviews user stories; identifies test conditions;
+  estimates testing effort; raises ambiguities before work starts
+
+Sprint Execution (Days 2–9):
+  QA writes automation code in parallel with developers
+  QA tests stories as soon as they are "developer done"
+  QA logs defects immediately so developers can fix them in the same sprint
+  QA participates in daily standup (what did I test, what am I testing, any blockers)
+
+Sprint Review (Day 10):
+  QA verifies all acceptance criteria are met before the demo
+  QA helps demonstrate features to stakeholders
+
+Sprint Retrospective:
+  QA contributes to improving quality processes
+  QA identifies testing bottlenecks and proposes solutions
+```
+
+**Definition of Done — QA's contribution:**
+
+QA typically defines or strongly influences the team's Definition of Done:
+
+```
+A story is DONE when:
+  - All acceptance criteria pass
+  - Automated regression tests are written and passing
+  - No critical or high severity defects open
+  - Code reviewed and merged
+  - Deployed to staging and smoke tested
+  - Documentation updated if applicable
+```
+
+**The agile testing quadrants (Brian Marick):**
+
+```
+                       Business-Facing
+                             ^
+                             |
+Q2 (Automated + Manual):     |     Q3 (Manual):
+  Acceptance tests           |       Exploratory testing
+  BDD/Gherkin scenarios      |       Usability testing
+  Story tests                |       User acceptance testing
+                             |
+Supporting ←─────────────────┼─────────────────→ Critiquing
+the Team                     |                   the Product
+                             |
+Q1 (Automated):              |     Q4 (Tools-Assisted):
+  Unit tests                 |       Performance testing
+  Integration tests          |       Security testing
+  Component tests            |       Compatibility testing
+                             |
+                             v
+                       Technology-Facing
+```
+
+- **Q1 and Q2:** Tests that support the team during development
+- **Q3 and Q4:** Tests that critique the product from user and non-functional perspectives
+
+---
+
+**Q28: What is session-based exploratory testing?**
+
+**A:**
+
+Session-based exploratory testing (SBET) is a structured approach to exploratory testing that makes it measurable and manageable. Instead of ad hoc random testing, it uses time-boxed sessions with defined missions.
+
+**Components of a session:**
+
+**1. Charter (the mission):**
+A clear statement of what to explore and the focus area.
+
+```
+Example charter: "Explore the user registration flow with focus on input validation —
+particularly email format validation, password strength rules, and the behaviour
+when a duplicate email is used."
+```
+
+**2. Time-box:**
+A fixed time limit — typically 60 or 90 minutes. When the timer ends, the session is complete regardless of whether all areas were explored.
+
+**3. Session notes:**
+Written during the session using a structured format:
+
+```
+Session Charter: Explore coupon code validation in checkout
+Tester: [Name]
+Date: 2024-11-15
+Duration: 90 minutes
+Build: v2.1.4
+
+AREAS TESTED:
+  - Single coupon code application
+  - Two simultaneous coupon codes
+  - Expired coupon code
+  - Coupon code for non-qualifying products
+  - Case sensitivity of coupon codes
+
+BUGS FOUND:
+  - BUG-1045: Two coupons can be applied simultaneously; only first discount is calculated
+  - BUG-1046: Coupon "SAVE10" is case-sensitive — "save10" does not work
+  - BUG-1047: Expired coupon gives success message but no discount applied
+
+ISSUES / QUESTIONS:
+  - What is the intended behaviour for stacked coupons?
+  - Should coupon codes be case-insensitive by design?
+
+OBSERVATIONS:
+  - Coupon validation is slow (~3 seconds API call) — possible performance issue
+```
+
+**4. Debrief:**
+Report findings to the team. Convert important discoveries to formal test cases. Decide on follow-up sessions for areas not yet explored.
+
+**Why session-based exploratory testing is valuable:**
+- Makes exploratory testing accountable and reportable (number of sessions, bugs per session)
+- Ensures focus — a charter prevents aimless clicking
+- Builds a record of what was tested and when
+- Produces defects that scripted testing would never find
+
+---
+
+**Q29: What are the types of performance testing? What is the difference between load, stress, spike, and soak testing?**
+
+**A:**
+
+Performance testing verifies how a system behaves under various load conditions. Different types answer different questions about the system's performance characteristics.
+
+**Load Testing:**
+Simulates expected real-world user load to verify the system meets performance SLAs (Service Level Agreements).
+
+```
+Goal: Does the system perform adequately under NORMAL production load?
+Question: Can we handle 500 concurrent users with < 2s response time?
+
+Profile:
+  Ramp up: 0 → 500 users over 5 minutes
+  Steady state: 500 users for 20 minutes
+  Ramp down: 500 → 0 over 2 minutes
+
+Pass/Fail: Response time < 2s for 95th percentile; error rate < 0.1%
+```
+
+**Stress Testing:**
+Pushes the system beyond its design limits to find the breaking point.
+
+```
+Goal: Where does the system fail, and how does it fail?
+Question: At what user count does response time become unacceptable or errors occur?
+
+Profile:
+  Ramp up: 0 → 2000 users progressively (beyond design limit of 500)
+  Observe: When does the system start to degrade?
+  When does the error rate spike?
+  How does it recover when load is reduced?
+
+Key findings: Maximum safe load, failure mode (graceful degradation or crash?)
+```
+
+**Spike Testing:**
+Simulates sudden, dramatic increases in users.
+
+```
+Goal: How does the system handle a sudden traffic surge?
+Question: If load jumps from 100 to 2000 users in 30 seconds (e.g., viral post, flash sale), does the system survive?
+
+Profile:
+  Normal load: 100 users
+  Sudden spike: 100 → 2000 users in 30 seconds
+  Return to normal: 2000 → 100 users
+  Observe: How long to recover? Were requests dropped?
+```
+
+**Endurance / Soak Testing:**
+Runs the system under sustained moderate load for an extended period (hours, days).
+
+```
+Goal: Do any resources leak over time?
+Question: After 8 hours at 300 concurrent users, is memory still stable? Are connections pooling correctly?
+
+Profile:
+  Load: 300 users (60% of max) for 8+ hours
+  Monitor: Memory usage (should be flat), CPU, DB connections, response time trend
+
+Common findings: Memory leaks (memory grows continuously), connection pool exhaustion,
+                 log file growth filling disk, session management bugs
+```
+
+**Other performance test types:**
+
+| Type | Purpose |
+|---|---|
+| Volume Testing | System behaviour with very large amounts of data (millions of DB records) |
+| Scalability Testing | How well performance scales when adding more servers (horizontal scaling) |
+| Capacity Testing | Find the maximum users the system can handle before hardware must be upgraded |
+
+**Key performance metrics to report:**
+
+| Metric | Definition | Target Example |
 |---|---|---|
-| **Blocked tests** | Tests blocked / total tests | Shows environment stability |
-| **Automation coverage** | Automated test cases / total test cases | Shows automation maturity |
-| **Test efficiency** | Defects found / hours of testing | Shows testing effectiveness |
-| **Defect age** | Days from raised to closed | Shows resolution speed |
-
-### Reporting Metrics to Stakeholders
-
-Always provide trend data — a single number is meaningless without context.
-
-"90% pass rate this week, up from 85% last week, trending toward release exit criteria of 95%."
+| Response Time | Time from request sent to response received | < 2 seconds (95th percentile) |
+| Throughput | Requests processed per second | 1,000 RPS |
+| Error Rate | Percentage of failed requests | < 0.1% |
+| Concurrent Users | Simultaneous active users | 500 |
+| CPU Usage | Server CPU during load | < 80% |
+| Memory | RAM during load | Stable (not growing) |
 
 ---
 
-## 17. Agile Testing — Shift-Left, Three Amigos, BDD
+**Q30: What is regression testing strategy — full regression vs selective regression?**
 
-### Shift-Left Testing
+**A:**
 
-**Definition**: Moving testing activities earlier in the development lifecycle — to the left on the timeline.
+A regression testing strategy defines how much of the existing test suite to run after code changes. No single strategy is always best — the choice depends on the change scope, time available, and risk tolerance.
 
-**Traditional approach**: Developers build everything, throw it to QA at the end.
+**Full Regression:**
 
-**Shift-left approach**: QA is involved from sprint planning. Test cases are written before code. QA reviews requirements before a single line is coded.
-
-**Benefits**:
-- Defects found in requirements cost almost nothing to fix
-- Developers know what is being tested before they code
-- No surprises at the end of the sprint
-- Faster feedback cycles
-
-**How QA shifts left**:
-- Attend backlog refinement to clarify requirements
-- Write test conditions when user stories are written
-- Define acceptance criteria with the team
-- Review API contracts before implementation
-- Pair with developers on tricky logic
-
-### Three Amigos
-
-A technique where three perspectives review each user story before development begins:
-
-- **Product Owner (Business)**: "This is what I want"
-- **Developer (Technical)**: "This is how I will build it"
-- **QA (Testing)**: "This is how I will test it — and here are the edge cases you haven't thought of"
-
-**Goal**: Shared understanding. All three agree on requirements, scope, and acceptance criteria before a story enters a sprint.
-
-**What QA brings to Three Amigos**:
-- Edge cases and boundary values
-- Negative scenarios
-- Questions about error handling
-- Questions about permissions and roles
-- Non-functional requirements (performance, security)
-
-### BDD — Behaviour-Driven Development
-
-**Definition**: A collaborative approach where tests are written in plain language (Gherkin) that all stakeholders (business, developers, QA) can read and understand.
-
-**Gherkin syntax** (the language for BDD):
-
-```gherkin
-Feature: User Login
-
-  Scenario: Successful login with valid credentials
-    Given the user is on the login page
-    And the user has a registered account with email "user@example.com"
-    When the user enters email "user@example.com" and password "Password123"
-    And the user clicks the Login button
-    Then the user should be redirected to the dashboard
-    And the user should see "Welcome, User" in the header
-
-  Scenario: Login fails with incorrect password
-    Given the user is on the login page
-    When the user enters email "user@example.com" and password "WrongPass"
-    And the user clicks the Login button
-    Then the user should remain on the login page
-    And an error message "Invalid credentials" should be displayed
-
-  Scenario Outline: Login validation for various invalid emails
-    Given the user is on the login page
-    When the user enters email "<email>" and password "Password123"
-    And the user clicks the Login button
-    Then the user should see error "<error_message>"
-
-    Examples:
-      | email         | error_message                     |
-      | notanemail    | Please enter a valid email address |
-      |               | Email is required                 |
-      | @nodomain.com | Please enter a valid email address |
-```
-
-**Tools**: Cucumber (Java/JS/Ruby), SpecFlow (.NET), Behave (Python)
-
-**BDD vs TDD**
-
-| | TDD | BDD |
-|---|---|---|
-| **Focus** | Implementation correctness | Behaviour / business value |
-| **Language** | Code (test frameworks) | Gherkin (plain language) |
-| **Who writes** | Developers | QA + BA + Developers together |
-| **Level** | Unit tests | Acceptance tests |
-| **Cycle** | Red → Green → Refactor | Scenarios defined → Automated → Code written |
-
-**Agile testing quadrants** (Brian Marick model):
+Run every test in the entire test suite after any change.
 
 ```
-                   Business-facing
-                         ↑
-Q2 (Automated + Manual)  |  Q3 (Manual)
- - Acceptance tests      |  - Exploratory testing
- - BDD scenarios         |  - Usability testing
-                         |  - User acceptance testing
-Supporting the team ←────┼────→ Critiquing the product
-                         |
-Q1 (Automated)           |  Q4 (Tools)
- - Unit tests            |  - Performance testing
- - Integration tests     |  - Security testing
-                         |  - Compatibility testing
-                         ↓
-                   Technology-facing
+When to use:
+  - Before major releases
+  - After large architectural refactoring
+  - Before deploying to production
+  - When the change scope is unknown
+
+Pros: Maximum coverage; highest confidence
+Cons: Slow (may take hours); expensive; impractical for daily CI runs
+
+Tool support: Run the full suite nightly in CI; automated in Jenkins/GitHub Actions
+```
+
+**Selective Regression:**
+
+Run only tests related to the changed area plus its dependencies.
+
+```
+Process:
+  1. Identify which modules changed in this build
+  2. Find all test cases that cover those modules (use requirements traceability matrix)
+  3. Also run tests for any module that depends on the changed module
+  4. Run those tests only
+
+Example: Payment module changed → run:
+  - All payment tests
+  - Checkout tests (depends on payment)
+  - Order confirmation tests (depends on checkout)
+  - NOT: Search tests, profile tests (unrelated)
+
+Pros: Much faster than full regression; proportional to change scope
+Cons: Requires good test-to-code traceability; risk of missing cross-module impacts
+```
+
+**Risk-Based Regression:**
+
+Always run high-risk tests; run medium-risk when time allows; skip low-risk tests until release.
+
+```
+Priority 1 (always run): Payment, login, checkout, data-saving operations
+Priority 2 (run when time allows): Search, filtering, reporting, notifications
+Priority 3 (run at release only): Admin tools, footer, static pages
+
+This is applied WITHIN the CI pipeline:
+  On every PR: Run Priority 1 tests only (~10 minutes)
+  On every merge to main: Run Priority 1 + 2 (~30 minutes)
+  Nightly: Run full regression Priority 1 + 2 + 3 (~60 minutes)
 ```
 
 ---
 
-## 18. Interview Q&A (10 Questions)
-
-**Q1: What is the difference between verification and validation? Give an example.**
-
-Verification asks "are we building the product right?" and checks documents, processes, and plans against standards — without running the software. Validation asks "are we building the right product?" and involves actually testing the software.
-
-Example: Reviewing a requirements specification for completeness and clarity is verification. Running the built application against those requirements is validation.
-
-**Q2: Explain equivalence partitioning and boundary value analysis. How do they complement each other?**
-
-Equivalence partitioning divides inputs into groups where every value in the group is expected to behave identically. You test one value per group, reducing the number of tests. BVA extends EP by focusing on the edges of each partition, since defects cluster at boundaries. EP tells you *which groups* to test; BVA tells you *which values within those groups* to prioritise. Together they give maximum fault detection with minimum test cases.
-
-**Q3: What is the difference between severity and priority? Give an example where they differ.**
-
-Severity is the technical impact on the system; priority is the business urgency to fix. They are independent.
-
-Example 1 (high severity, low priority): A crash occurs in a legacy report used by one internal user monthly. The system crashes, which is high severity, but priority is low because almost nobody is affected.
-
-Example 2 (low severity, high priority): The company CEO's name is spelled wrong on the homepage. No functional impact (low severity) but must be fixed immediately for brand reasons (high priority).
-
-**Q4: Walk me through the defect lifecycle. When does a defect get "Reopened"?**
-
-A defect follows: New → Assigned → Open → Fixed → Retest. After retest, QA either Closes it (fix verified) or Reopens it (bug still present). Reopened means the developer's fix did not resolve the problem; QA adds evidence (screenshot, new steps) and the defect goes back through the cycle. Only QA can Close or Reopen a defect — never the developer.
-
-**Q5: What is risk-based testing and how do you prioritise your test effort?**
-
-Risk-based testing prioritises areas of the system with the highest risk of failure combined with the highest impact if they fail. Risk = Probability × Impact. I identify risky areas (new code, complex logic, recently changed modules, business-critical features), score them on probability and impact, and allocate most test effort to high-risk areas. If time runs out, low-risk areas are skipped, not high-risk ones.
-
-**Q6: What is the difference between regression testing and confirmation testing?**
-
-Confirmation testing (re-testing) specifically verifies that a particular defect has been fixed — you re-execute exactly the steps that originally found the defect to confirm the fix works. Regression testing is broader: after any change, you re-run the existing test suite to verify that nothing previously working has been broken by the change. Every fix requires both confirmation testing (did this specific bug get fixed?) and regression testing (did fixing it break anything else?).
-
-**Q7: What are the main ISTQB black-box techniques and when do you use each?**
-
-Equivalence Partitioning: when the input space is large and can be grouped into classes. Boundary Value Analysis: always applied at the edges of EP partitions. Decision Table: when the system has multiple condition combinations leading to different outcomes (permission systems, pricing rules). State Transition: when the system has distinct states and events (order lifecycle, booking systems). Use Case Testing: when you want to test end-to-end user journeys.
-
-**Q8: What is exploratory testing and when is it better than scripted testing?**
-
-Exploratory testing means simultaneously designing and executing tests, guided by the tester's knowledge and intuition, usually within a time-boxed session. It is better than scripted testing when: testing new features with incomplete requirements; investigating areas where automated tests pass but something "feels wrong"; performing risk-based investigation; testing usability and user experience. Scripted testing is better for regression, compliance, and when repeatability and coverage measurement are required.
-
-**Q9: What performance testing types do you know and what distinguishes load from stress testing?**
-
-Load testing applies expected production load to verify the system meets performance SLAs — it answers "does the system perform adequately under normal conditions?". Stress testing pushes the system beyond its design limits to find the breaking point — it answers "how does the system fail and at what threshold?". Other types: spike testing (sudden traffic bursts), endurance/soak testing (sustained load over hours to find memory leaks), volume testing (large data sets), scalability testing (how well it scales horizontally).
-
-**Q10: What is shift-left testing and why does it matter?**
-
-Shift-left means involving QA earlier in the development process — during requirements and design, not just after code is written. It matters because defects are exponentially cheaper to fix the earlier they are found. A requirements defect caught by QA in sprint planning takes minutes to correct; the same defect found in production may require a hotfix, data migration, customer communication, and loss of reputation. QA contributes most value not by finding bugs in finished software but by preventing them from being built in the first place.
+## SECTION 9: INTERVIEW Q&A
 
 ---
 
-*Guide complete — covers all ISTQB Foundation Level topics: SDLC/STLC, test levels, test types, design techniques, defect management, risk, metrics, and agile testing.*
+**Q31: What is the difference between smoke testing and sanity testing? (Interview question)**
+
+**A:**
+
+Smoke testing is a broad, shallow check of the entire build to verify it is stable enough to test. It covers many areas briefly. Done after every new build is received. If smoke fails, the build is rejected immediately — no further testing.
+
+Sanity testing is a narrow, deep verification of a specific area that was changed or fixed. Done after receiving a targeted fix. It focuses only on the changed feature and its immediate neighbours.
+
+Analogy: Smoke = checking that the car starts and the wheels are on. Sanity = checking that the repaired brake works correctly.
+
+---
+
+**Q32: Explain equivalence partitioning and boundary value analysis with an example. (Interview question)**
+
+**A:**
+
+Equivalence partitioning divides the input space into groups where every value in the group behaves identically. Instead of testing every possible input, you test one value from each group.
+
+Boundary value analysis extends EP by focusing on the edges of each partition, because defects cluster at boundaries (off-by-one errors, incorrect comparison operators).
+
+Example: A field accepts age 18–65 for loan eligibility.
+
+EP partitions: under 18 (invalid), 18–65 (valid), over 65 (invalid) → 3 tests.
+
+BVA adds: test at 17 (just below min), 18 (at min), 19 (just above min), 64 (just below max), 65 (at max), 66 (just above max) → 6 boundary tests.
+
+Together they give 6 tests that catch the vast majority of input validation bugs, including off-by-one errors a developer might introduce by writing `> 18` instead of `>= 18`.
+
+---
+
+**Q33: What is the difference between severity and priority? Give an example where they differ. (Interview question)**
+
+**A:**
+
+Severity is the technical impact of a bug. Priority is the business urgency to fix it. They are independent and set by different people.
+
+Classic examples:
+
+High severity, low priority: A crash occurs when a legacy quarterly report runs for the finance team's one internal user. The system crashes (critical severity) but business urgency is low because almost nobody uses it and it only runs 4 times a year.
+
+Low severity, high priority: The company name is spelled wrong in the homepage hero banner. There is zero functional impact (trivial severity) but it is embarrassing, visible to millions of visitors, and must be fixed within the hour (critical priority).
+
+---
+
+**Q34: Walk me through the defect lifecycle. When does a defect get reopened? (Interview question)**
+
+**A:**
+
+A defect goes: New → Assigned → Open → Fixed → Retest, then either Closed or Reopened.
+
+Reopened means QA retested the fix and the defect is still present. QA adds new evidence — a screenshot showing the bug still exists, or an updated step-by-step reproduction — and moves the defect back to Open. The developer must investigate again.
+
+The critical rule: only QA can Close or Reopen a defect — never the developer who fixed it. Developers have a conflict of interest. If a developer closes their own fix, there is no independent verification.
+
+Deferred means the bug is real but will not be fixed in this release. It is NOT closed — it goes into the backlog for a future release.
+
+---
+
+**Q35: What is risk-based testing and how do you use it to prioritise your effort? (Interview question)**
+
+**A:**
+
+Risk-based testing uses Risk = Probability × Impact to prioritise which parts of the system to test most thoroughly.
+
+I identify features with high probability of failure (new code, complex logic, recent changes) and high impact (revenue, security, core user journeys). These get deep testing with multiple techniques, automation, and exploratory sessions.
+
+Features with low probability and low impact (stable, unchanged, rarely used) get light smoke testing. If time runs out, these are skipped — not the high-risk areas.
+
+This means if a sprint is cut short, I have still thoroughly tested the things that matter most. Stakeholders understand the trade-off: we covered all critical areas; these lower-risk areas were not fully tested due to time constraints.
+
+---
+
+**Q36: What is the difference between verification and validation? (Interview question)**
+
+**A:**
+
+Verification asks "are we building the product right?" — checking documents, processes, and designs against standards. It does not involve running the software.
+
+Validation asks "are we building the right product?" — checking that the working software actually meets user needs.
+
+Example: Reviewing the requirements specification to check it is complete, unambiguous, and testable is verification. Running the built application and confirming it does what the specification says is validation.
+
+In the SDLC, verification happens throughout (review every document as it is produced). Validation happens when there is working software to test.
+
+---
+
+**Q37: What is the test pyramid and why should a QA team follow it? (Interview question)**
+
+**A:**
+
+The test pyramid says: many unit tests, a moderate number of API/integration tests, and a few UI tests. This is the opposite of what teams naturally tend toward — they write UI tests because they are easy to understand, which creates the "ice cream cone" anti-pattern.
+
+The pyramid matters because UI tests are slow (minutes each), brittle (break when the UI changes), and expensive to maintain. Unit tests run in milliseconds, are stable because they test pure logic, and are cheap.
+
+A practical distribution: 70% unit tests, 20% API tests, 10% UI tests. For a QA engineer, this means resisting the urge to automate every scenario in the UI and instead asking "can this be covered at the API level?" A test that verifies a business calculation rule should be a unit test, not a Playwright test that opens a browser to trigger the calculation.
+
+---
+
+**Q38: What is shift-left testing and how did you apply it in practice? (Interview question)**
+
+**A:**
+
+Shift-left means involving QA earlier — during requirements and design, not after code is written. The reason is that defects found in requirements cost almost nothing to fix, while defects found in production cost 100x more.
+
+In practice I shift left by attending sprint planning and backlog refinement to spot ambiguous or untestable requirements before the sprint starts. I participate in Three Amigos meetings where I bring edge cases the team has not thought of. I write test conditions alongside user stories, before a developer writes a line of code. I set up test data and environment requirements at the start of the sprint so there is no blocking when code is ready to test.
+
+The result is that stories are clearer before development starts, developers know what will be tested so they code with that in mind, and there are far fewer late-sprint surprises.
+
+---
+
+**Q39: What is the difference between load testing and stress testing? (Interview question)**
+
+**A:**
+
+Load testing applies expected real-world load to verify the system meets performance targets under normal conditions. If the system is designed for 500 concurrent users, I run 500 concurrent users and measure response times, throughput, and error rates against the agreed SLA.
+
+Stress testing pushes the system beyond its design limits to find the breaking point. I ramp users far beyond 500 — to 1000, 1500, 2000 — and observe at what point the system starts to degrade, when errors spike, and critically, how it fails: does it give a graceful "service unavailable" message or does it crash hard?
+
+Stress testing also reveals how the system recovers. If I drop the load back to 500 after the system is stressed, does it recover to normal performance within 60 seconds, or does it require a restart?
+
+---
+
+**Q40: What is exploratory testing and when do you prefer it over scripted testing? (Interview question)**
+
+**A:**
+
+Exploratory testing means simultaneously designing and executing tests, guided by knowledge and intuition, usually in a time-boxed session with a defined charter. There are no pre-written test steps — the tester decides what to do next based on what they observe.
+
+I prefer exploratory testing over scripted when: testing a new feature where requirements are still evolving; investigating an area where scripted tests pass but something feels wrong; assessing usability and user experience; or probing the area around a recently fixed bug.
+
+Scripted testing is better when: running regression tests that must be repeatable and comparable to previous runs; testing compliance requirements where I must prove specific scenarios were executed; or onboarding a new tester who needs guided step-by-step procedures.
+
+The key is combining both: scripted testing for repeatability and coverage measurement, exploratory testing for finding what was not anticipated.
+
+---
+
+*Guide complete — covers SDLC, STLC, test levels, test pyramid, test design techniques (EP, BVA, decision tables, state transition, use case), code coverage, defect lifecycle, severity vs priority, risk-based testing, test planning, test metrics, agile testing, performance testing types, and 10 interview questions with full answers.*
