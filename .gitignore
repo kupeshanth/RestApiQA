@@ -13,3 +13,7 @@ apache-maven-3.9.6/
 # OS files
 .DS_Store
 Thumbs.db
+
+# Environment variables — NEVER commit this (contains passwords/tokens)
+.env
+*.env
