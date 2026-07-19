@@ -1,193 +1,367 @@
-# SQL & Database Testing — Complete Guide | QA Backend Verification
+# SQL & Database Testing — Complete Interview Q&A Guide
 
-> Senior QA Engineer Interview Reference — SQL Fundamentals, QA Scenarios, DB Testing Types, and Interview Q&A
-
----
-
-## Table of Contents
-
-1. [Why QA Engineers Need SQL](#1-why-qa-engineers-need-sql)
-2. [Core SQL — SELECT and Filtering](#2-core-sql--select-and-filtering)
-3. [JOINs — Combining Tables](#3-joins--combining-tables)
-4. [Aggregates — GROUP BY and HAVING](#4-aggregates--group-by-and-having)
-5. [NULL Handling](#5-null-handling)
-6. [String Functions](#6-string-functions)
-7. [Date and Time Functions](#7-date-and-time-functions)
-8. [Subqueries and IN / NOT IN](#8-subqueries-and-in--not-in)
-9. [INSERT, UPDATE, DELETE — Test Data Management](#9-insert-update-delete--test-data-management)
-10. [TRUNCATE vs DELETE](#10-truncate-vs-delete)
-11. [Real QA SQL Scenarios — 10 Practical Examples](#11-real-qa-sql-scenarios--10-practical-examples)
-12. [Database Testing Types](#12-database-testing-types)
-13. [ACID Properties](#13-acid-properties)
-14. [Test Data Management — Setup and Teardown](#14-test-data-management--setup-and-teardown)
-15. [Connecting to a Database from Java Tests (JDBC)](#15-connecting-to-a-database-from-java-tests-jdbc)
-16. [Senior Interview Q&A — 10 Questions with Full Answers](#16-senior-interview-qa--10-questions-with-full-answers)
+> Every concept covered as a real interview question with full answer, notes, code, and context.
+> 40+ questions. Senior QA Engineer level.
 
 ---
 
-## 1. Why QA Engineers Need SQL
+## SECTION 1 — WHY QA ENGINEERS NEED SQL
 
-### The QA Rationale for SQL
+---
 
-When you test a REST API, the response you receive is only part of the story. The real question is: **did the correct data end up in the database?**
+**Q1: Why does a QA engineer need to know SQL? Isn't that a developer skill?**
 
-An API can return HTTP 201 Created with a beautiful JSON body, but the data might be:
-- Stored in the wrong column.
-- Missing a required field.
-- Saved with an incorrect value (e.g., rounding error on price).
-- Linked to the wrong parent record (wrong foreign key).
-- Partially written (only some columns updated).
-- Soft-deleted incorrectly (row removed instead of flagged).
+**A:** SQL is one of the most important QA skills because API responses only tell half the story. When you call `POST /users` and get back `201 Created`, you have verified the HTTP layer — but you have not verified whether the correct data was actually written to the database, in the right columns, with the right values, linked to the right parent records.
 
-SQL gives QA engineers the ability to **verify the ground truth** — what actually exists in the database — independent of what the API claims.
+A QA engineer without SQL can only verify:
+- The API returned a response
+- The response body looks correct
 
-### Key QA Use Cases
+A QA engineer with SQL can verify:
+- The correct row was inserted
+- The correct columns were populated with the correct values
+- Foreign key relationships are intact
+- Constraints were enforced (no duplicates, no NULLs in required fields)
+- Soft deletes set the `deleted_at` flag instead of physically removing the row
+- Audit logs captured the expected changes
+- Pagination returns the exact records from the database, not a cached or computed list
 
-| Use Case | Why SQL is Needed |
+Without SQL, you are testing the surface. With SQL, you are testing the ground truth.
+
+**Key QA use cases for SQL:**
+
+| Scenario | Why SQL is needed |
 |---|---|
-| Verify POST /users API | Confirm the user row was inserted with correct values |
+| Verify POST /users | Confirm the user row exists in DB with correct values |
 | Verify PATCH /orders/{id} | Confirm only the changed fields were updated |
-| Validate data integrity | Check foreign keys, no orphaned records |
-| Verify soft delete | Confirm `deleted_at` was set, row was not physically removed |
-| Validate pagination | Confirm the correct page of records is returned |
-| Audit trail verification | Confirm audit_log table has the expected entry |
-| Test data setup | INSERT test records before a test |
-| Test data teardown | DELETE or ROLLBACK test records after a test |
-| Validate migrations | Confirm all existing data was correctly transformed |
-| Find duplicate data | Check for constraint violations or bad data seeding |
+| Verify soft delete | Confirm deleted_at was set, row not physically removed |
+| Validate pagination | Confirm the correct page of records matches DB order |
+| Check audit trail | Confirm audit_log table has the expected entry |
+| Detect orphaned records | Find orders with no parent user (referential integrity) |
+| Find duplicate data | Detect missing UNIQUE constraints |
+| Test data setup | INSERT records before a test |
+| Test data teardown | DELETE or ROLLBACK records after a test |
+| Validate data migration | Confirm all rows transformed correctly |
 
 ---
 
-## 2. Core SQL — SELECT and Filtering
+**Q2: How do you verify that an API call correctly wrote data to the database? Walk me through the process.**
 
-### Basic SELECT
+**A:** This is a two-step verification process: first call the API, then query the database to confirm the persistence layer has the correct state.
 
+Concrete example — testing `POST /api/users`:
+
+Step 1 — Call the API:
+```http
+POST /api/users
+Content-Type: application/json
+
+{
+  "name": "Alice Test",
+  "email": "alice.test@example.com",
+  "role": "viewer"
+}
+```
+API returns `201 Created` with body containing the new user's ID (e.g., `{ "id": 42, ... }`).
+
+Step 2 — Query the database to verify:
 ```sql
--- Select all columns from a table
+SELECT id, name, email, role, status, created_at
+FROM users
+WHERE id = 42;
+```
+
+Expected result:
+- `id` = 42 (matches API response)
+- `name` = 'Alice Test' (correct spelling, no trimming issue)
+- `email` = 'alice.test@example.com' (no case conversion bug)
+- `role` = 'viewer' (correct default or provided value)
+- `status` = 'active' (correct default applied)
+- `created_at` = a timestamp within the last few seconds (not NULL, not a future date)
+
+Failure scenarios to verify against:
+- Zero rows returned = API returned 201 but never wrote to DB
+- Wrong `name` or `email` = data transformation bug
+- `status` is NULL = default not applied by application
+- `role` is 'admin' instead of 'viewer' = incorrect value saved
+- `created_at` is NULL = trigger or ORM not setting timestamp
+
+In automated Java tests, this looks like:
+```java
+// Call API, get back the created ID
+int userId = given().body(requestBody).post("/api/users").then()
+    .statusCode(201).extract().path("id");
+
+// Verify in DB
+var row = db.query("SELECT name, email, role, status FROM users WHERE id = ?", userId);
+assertEquals(1, row.size());
+assertEquals("viewer", row.get(0).get("role"));
+assertEquals("active", row.get(0).get("status"));
+```
+
+---
+
+## SECTION 2 — SELECT AND FILTERING
+
+---
+
+**Q3: What is SELECT and how do you use the WHERE clause? Give QA examples.**
+
+**A:** `SELECT` retrieves rows from a table. `WHERE` filters which rows are returned. These are the two most fundamental SQL operations a QA engineer uses daily.
+
+Basic forms:
+```sql
+-- Get all columns from a table
 SELECT * FROM users;
 
--- Select specific columns
+-- Get specific columns only
 SELECT id, name, email, created_at FROM users;
 
--- Give columns aliases
-SELECT id AS user_id, name AS full_name, email FROM users;
+-- Give columns aliases for readability
+SELECT id AS user_id, name AS full_name FROM users;
 ```
 
-### WHERE Clause
-
+WHERE clause with QA examples:
 ```sql
--- Single condition
+-- Verify a specific user exists after POST /users
+SELECT * FROM users WHERE email = 'alice.test@example.com';
+
+-- Verify all active users (for testing GET /users?status=active)
 SELECT * FROM users WHERE status = 'active';
+
+-- Find orders above a threshold (testing a business rule)
 SELECT * FROM orders WHERE total_amount > 100;
 
--- AND — both conditions must be true
-SELECT * FROM users WHERE status = 'active' AND role = 'admin';
+-- Range check (BETWEEN is inclusive on both ends)
+SELECT * FROM orders WHERE created_at BETWEEN '2024-01-01' AND '2024-01-31';
 
--- OR — either condition must be true
-SELECT * FROM orders WHERE status = 'pending' OR status = 'processing';
-
--- NOT — negate a condition
-SELECT * FROM users WHERE NOT status = 'deleted';
-SELECT * FROM orders WHERE NOT (status = 'cancelled' OR status = 'refunded');
-
--- IN — match any value in a list
+-- Match a list of values (IN)
 SELECT * FROM orders WHERE status IN ('pending', 'processing', 'shipped');
 
--- NOT IN — exclude values in a list
+-- Exclude values (NOT IN)
 SELECT * FROM users WHERE role NOT IN ('admin', 'superuser');
-
--- BETWEEN — range check (inclusive)
-SELECT * FROM orders WHERE total_amount BETWEEN 10.00 AND 100.00;
-SELECT * FROM orders WHERE created_at BETWEEN '2024-01-01' AND '2024-01-31';
 ```
 
-### ORDER BY
+**Interview note:** `WHERE` is evaluated before `SELECT`, meaning the database filters rows first, then returns only the columns you asked for. This matters for performance — always filter on indexed columns.
+
+---
+
+**Q4: What is AND, OR, NOT in SQL? Give examples with real test scenarios.**
+
+**A:** These are logical operators used to combine multiple conditions in a WHERE clause.
+
+`AND` — both conditions must be true:
+```sql
+-- Find active admin users (verify role assignment API)
+SELECT * FROM users WHERE status = 'active' AND role = 'admin';
+
+-- Find high-value pending orders (test filtering API)
+SELECT * FROM orders WHERE status = 'pending' AND total_amount > 500;
+```
+
+`OR` — either condition must be true:
+```sql
+-- Find orders that are in any "active" state
+SELECT * FROM orders WHERE status = 'pending' OR status = 'processing';
+
+-- Equivalent using IN (cleaner for multiple OR on same column)
+SELECT * FROM orders WHERE status IN ('pending', 'processing');
+```
+
+`NOT` — negate a condition:
+```sql
+-- Find all users who are not deleted
+SELECT * FROM users WHERE NOT status = 'deleted';
+
+-- Equivalent
+SELECT * FROM users WHERE status != 'deleted';
+
+-- More complex negation
+SELECT * FROM orders WHERE NOT (status = 'cancelled' OR status = 'refunded');
+```
+
+**QA test scenario:** After calling `DELETE /api/users/101` (soft delete), you want to verify the user is no longer in the active list but the row still exists:
+```sql
+-- Row still exists
+SELECT COUNT(*) FROM users WHERE id = 101;  -- should be 1
+
+-- But user is excluded from active users
+SELECT COUNT(*) FROM users WHERE id = 101 AND status = 'active';  -- should be 0
+SELECT COUNT(*) FROM users WHERE id = 101 AND deleted_at IS NULL;  -- should be 0
+```
+
+---
+
+**Q5: What is ORDER BY? When do you use it in testing?**
+
+**A:** `ORDER BY` sorts the result set by one or more columns. It is critical in testing because many APIs return results in a specific order, and the SQL query used to verify must use the same sort.
 
 ```sql
--- Ascending (default)
+-- Sort ascending (A-Z, oldest first, smallest first)
 SELECT * FROM users ORDER BY name ASC;
 
--- Descending
+-- Sort descending (Z-A, newest first, largest first)
 SELECT * FROM orders ORDER BY created_at DESC;
 
--- Multiple columns
+-- Multi-column sort: primary sort by status, secondary by date
 SELECT * FROM orders ORDER BY status ASC, created_at DESC;
 ```
 
-### LIMIT and OFFSET
+**When to use it in testing:**
 
-```sql
--- First 10 rows
-SELECT * FROM users LIMIT 10;
+1. **Pagination verification** — if the API paginates by `ORDER BY created_at DESC`, your SQL must use the same ordering:
+   ```sql
+   SELECT id FROM orders ORDER BY created_at DESC LIMIT 10 OFFSET 0;
+   -- These IDs must match the API's first page response
+   ```
 
--- Page 2 (10 per page): skip first 10, get next 10
-SELECT * FROM users ORDER BY id LIMIT 10 OFFSET 10;
+2. **Verifying "most recent" record** — after creating an entity, confirm your new record is the latest:
+   ```sql
+   SELECT * FROM audit_logs ORDER BY created_at DESC LIMIT 1;
+   -- Should be the log entry your API just created
+   ```
 
--- Page 3
-SELECT * FROM users ORDER BY id LIMIT 10 OFFSET 20;
-```
+3. **Detecting sort order bugs** — call `GET /api/products?sort=price_asc` and then:
+   ```sql
+   SELECT id, price FROM products ORDER BY price ASC;
+   -- Product order must match the API response order
+   ```
 
----
-
-## 3. JOINs — Combining Tables
-
-### Visual Explanation of JOIN Types
-
-```
-Table A (users)          Table B (orders)
-id | name                id | user_id | amount
------------               -----------------
-1  | Alice               1  | 1       | 50.00
-2  | Bob                 2  | 1       | 30.00
-3  | Carol               3  | 4       | 20.00 ← user_id 4 doesn't exist in users
-                         4  | 2       | 15.00
-```
+**Interview note:** SQL results have no guaranteed order unless you explicitly use `ORDER BY`. Never assume rows come back in insertion order.
 
 ---
 
-### INNER JOIN — Matching Rows Only
+**Q6: What is LIMIT and OFFSET? How do you test API pagination using SQL?**
 
-Returns rows where there is a match in **both** tables.
+**A:** `LIMIT` restricts how many rows are returned. `OFFSET` skips a number of rows before starting to return results. Together they implement pagination in SQL, mirroring how APIs typically paginate their responses.
 
 ```sql
-SELECT u.id, u.name, o.id AS order_id, o.amount
+-- Page 1: first 10 rows
+SELECT * FROM orders ORDER BY created_at DESC LIMIT 10 OFFSET 0;
+
+-- Page 2: next 10 rows (skip first 10)
+SELECT * FROM orders ORDER BY created_at DESC LIMIT 10 OFFSET 10;
+
+-- Page 3: rows 21-30
+SELECT * FROM orders ORDER BY created_at DESC LIMIT 10 OFFSET 20;
+
+-- Formula: OFFSET = (page_number - 1) * page_size
+-- Page 5 with 20 per page: OFFSET = (5 - 1) * 20 = 80
+SELECT * FROM orders ORDER BY created_at DESC LIMIT 20 OFFSET 80;
+```
+
+**How to test pagination with SQL:**
+
+1. Call `GET /api/orders?page=2&limit=10` and note the returned IDs
+2. Run the equivalent SQL:
+   ```sql
+   SELECT id FROM orders ORDER BY created_at DESC LIMIT 10 OFFSET 10;
+   ```
+3. The IDs returned by SQL must exactly match the IDs in the API response
+
+**What to verify:**
+```sql
+-- Total record count matches API meta.totalCount
+SELECT COUNT(*) FROM orders;
+-- Should match { "meta": { "totalCount": 892 } }
+
+-- Edge case: last page
+-- If total is 892 and page size is 10, the last page (90) has 2 records
+SELECT COUNT(*) FROM orders ORDER BY created_at DESC LIMIT 10 OFFSET 890;
+-- Should return 2 rows, not an error
+```
+
+**Common bug caught:** API uses wrong ORDER BY internally (e.g., orders by `id` instead of `created_at`), causing pagination records to not match what the SQL verification query returns.
+
+---
+
+## SECTION 3 — JOINS
+
+---
+
+**Q7: What is an INNER JOIN? Give a QA use case with a real SQL example.**
+
+**A:** An INNER JOIN returns only the rows where there is a matching value in both tables. If a row in table A has no match in table B, it is excluded from results entirely.
+
+```sql
+SELECT u.id, u.name, o.id AS order_id, o.total_amount, o.status
 FROM users u
 INNER JOIN orders o ON u.id = o.user_id;
 ```
 
-**Result**: Alice (2 orders), Bob (1 order). Carol has no orders, order #3 has no user — both are excluded.
+This returns only users who have placed at least one order, joined with their order details.
 
-**QA Use Case**: "Show me all users who have placed at least one order." If a user appears in the result, they have matching orders.
+**QA use case — Verify order-user relationship after bulk data migration:**
+
+After migrating 10,000 orders from a legacy system, you need to verify every migrated order has a corresponding valid user:
+```sql
+-- If this returns fewer rows than the total order count,
+-- some orders have invalid user_ids (no matching user)
+SELECT COUNT(*) AS matched_orders
+FROM orders o
+INNER JOIN users u ON o.user_id = u.id;
+
+-- Compare to total order count
+SELECT COUNT(*) AS total_orders FROM orders;
+-- If matched_orders < total_orders, there are orphaned orders
+```
+
+**Multi-table INNER JOIN — verify a complex relationship:**
+```sql
+SELECT u.name, o.id AS order_id, o.total_amount, p.payment_method, p.status AS payment_status
+FROM orders o
+INNER JOIN users u ON o.user_id = u.id
+INNER JOIN payments p ON o.id = p.order_id
+WHERE o.status = 'completed'
+  AND p.status != 'approved';
+-- Should return 0 rows: completed orders should always have approved payments
+```
 
 ---
 
-### LEFT JOIN (LEFT OUTER JOIN) — All Left Rows + Matching Right
+**Q8: What is a LEFT JOIN? When would you use it instead of INNER JOIN?**
 
-Returns **all rows from the left table**, with matching rows from the right table. Non-matching right rows are NULL.
+**A:** A LEFT JOIN returns ALL rows from the left table, plus matching rows from the right table. Where there is no match in the right table, the right table's columns appear as NULL.
 
 ```sql
-SELECT u.id, u.name, o.id AS order_id, o.amount
+SELECT u.id, u.name, o.id AS order_id, o.total_amount
 FROM users u
 LEFT JOIN orders o ON u.id = o.user_id;
 ```
 
-**Result**: Alice (2 orders), Bob (1 order), Carol (order_id = NULL, amount = NULL). Carol is included even though she has no orders.
+Result: All users are returned. Users with no orders get `order_id = NULL, total_amount = NULL`.
 
-**QA Use Case**: "Find users who have never placed an order" — filter on `o.id IS NULL`:
+**Use LEFT JOIN instead of INNER JOIN when:**
+- You want to find records that have NO matching record in another table
+- You want to see all records from the primary table regardless of relationship status
 
+**QA use case — Find users who have never placed an order:**
 ```sql
-SELECT u.id, u.name
+SELECT u.id, u.name, u.email, u.created_at
 FROM users u
 LEFT JOIN orders o ON u.id = o.user_id
 WHERE o.id IS NULL;
--- Returns: Carol (3 | Carol)
+-- Returns users with zero orders — useful for testing "new user" state
 ```
+
+**QA use case — Find orders with no payment record (data integrity check):**
+```sql
+SELECT o.id AS order_id, o.total_amount, o.status, o.created_at
+FROM orders o
+LEFT JOIN payments p ON o.id = p.order_id
+WHERE p.id IS NULL
+  AND o.status != 'draft';
+-- Non-draft orders should always have a payment record
+-- Any rows returned = data integrity violation
+```
+
+**Interview note:** LEFT JOIN is the most commonly used JOIN in QA work because "find X that has no Y" is an extremely frequent data integrity check pattern.
 
 ---
 
-### RIGHT JOIN (RIGHT OUTER JOIN) — All Right Rows + Matching Left
+**Q9: What is a RIGHT JOIN? When would you use it?**
 
-Returns **all rows from the right table**, with matching rows from the left table. Non-matching left rows are NULL.
+**A:** A RIGHT JOIN returns ALL rows from the right table, plus matching rows from the left table. Where there is no match in the left table, the left table's columns appear as NULL.
 
 ```sql
 SELECT u.id, u.name, o.id AS order_id, o.amount
@@ -195,299 +369,598 @@ FROM users u
 RIGHT JOIN orders o ON u.id = o.user_id;
 ```
 
-**Result**: Alice's orders, Bob's order, and order #3 with user name = NULL.
+Result: All orders are returned. Orders with no matching user (orphaned orders) get `u.id = NULL, u.name = NULL`.
 
-**QA Use Case**: "Find orders that have no corresponding user (orphaned orders)" — filter on `u.id IS NULL`:
-
+**QA use case — Find orphaned orders (orders with no valid user):**
 ```sql
-SELECT o.id AS order_id, o.amount, o.user_id
+SELECT o.id AS order_id, o.user_id, o.total_amount, o.created_at
 FROM users u
 RIGHT JOIN orders o ON u.id = o.user_id
 WHERE u.id IS NULL;
--- Returns: order #3 (user_id=4, but no user with id=4)
+-- Returns orders whose user_id does not match any user in the users table
+-- Expected: 0 rows (referential integrity intact)
+-- Failure: any rows = foreign key constraint missing or cascade delete not working
+```
+
+**Practical note:** Most QA engineers rewrite RIGHT JOINs as LEFT JOINs by swapping table order — it is more readable and achieves the same result:
+```sql
+-- These are equivalent:
+SELECT o.id FROM users u RIGHT JOIN orders o ON u.id = o.user_id WHERE u.id IS NULL;
+SELECT o.id FROM orders o LEFT JOIN users u ON o.user_id = u.id WHERE u.id IS NULL;
 ```
 
 ---
 
-### FULL OUTER JOIN — All Rows from Both Tables
+**Q10: How do you detect orphaned records using SQL? What is an orphaned record?**
 
-Returns all rows from both tables. NULLs appear where there is no match.
+**A:** An orphaned record is a child record that references a parent record that no longer exists. For example, an `orders` row with `user_id = 500` when no user with `id = 500` exists in the `users` table.
 
+Orphaned records indicate:
+- Missing or disabled foreign key constraints
+- A bug in the delete cascade logic
+- Direct database manipulation that bypassed application code
+
+**SQL to detect orphaned orders:**
 ```sql
-SELECT u.id AS user_id, u.name, o.id AS order_id
-FROM users u
-FULL OUTER JOIN orders o ON u.id = o.user_id;
--- Note: MySQL doesn't support FULL OUTER JOIN natively — use UNION of LEFT and RIGHT JOIN
-```
-
----
-
-### Multi-Table JOIN
-
-```sql
-SELECT
-  u.name AS customer_name,
-  o.id AS order_id,
-  o.total_amount,
-  p.name AS payment_method,
-  s.status AS shipment_status
+SELECT o.id AS order_id, o.user_id, o.total_amount
 FROM orders o
-INNER JOIN users u ON o.user_id = u.id
-INNER JOIN payments p ON o.id = p.order_id
-LEFT JOIN shipments s ON o.id = s.order_id
-WHERE o.created_at >= CURDATE()
-ORDER BY o.created_at DESC;
+LEFT JOIN users u ON o.user_id = u.id
+WHERE u.id IS NULL;
+-- Expected: 0 rows
 ```
+
+**SQL to detect orphaned order_items:**
+```sql
+SELECT oi.id AS item_id, oi.order_id, oi.product_id
+FROM order_items oi
+LEFT JOIN orders o ON oi.order_id = o.id
+WHERE o.id IS NULL;
+-- Expected: 0 rows
+```
+
+**SQL to detect orphaned payments:**
+```sql
+SELECT p.id, p.order_id, p.amount
+FROM payments p
+LEFT JOIN orders o ON p.order_id = o.id
+WHERE o.id IS NULL;
+-- Expected: 0 rows
+```
+
+**When to run these checks:**
+- After a data migration
+- After testing a delete/cascade operation
+- After bulk data seeding
+- As part of a data integrity regression suite
 
 ---
 
-### JOIN Quick Reference
-
-| JOIN Type | Returns | QA Use Case |
-|---|---|---|
-| INNER JOIN | Matching rows only | Verify relationship exists |
-| LEFT JOIN | All left + matched right | Find records with no related record |
-| RIGHT JOIN | All right + matched left | Find orphaned records in right table |
-| FULL OUTER JOIN | All rows from both | Full reconciliation |
-| SELF JOIN | Same table joined to itself | Hierarchical data, find duplicates |
+## SECTION 4 — GROUP BY, HAVING, AGGREGATES
 
 ---
 
-## 4. Aggregates — GROUP BY and HAVING
+**Q11: What is GROUP BY? Give a QA example.**
 
-### Aggregate Functions
-
-```sql
-COUNT(*)           -- Count all rows
-COUNT(column)      -- Count non-NULL values
-COUNT(DISTINCT column) -- Count distinct non-NULL values
-SUM(column)        -- Sum of values
-AVG(column)        -- Average
-MAX(column)        -- Maximum value
-MIN(column)        -- Minimum value
-```
-
-### GROUP BY
+**A:** `GROUP BY` groups rows that share the same value in a column, and aggregate functions (COUNT, SUM, AVG, MAX, MIN) then compute a value for each group.
 
 ```sql
--- Count orders per status
+-- Count how many orders exist per status
 SELECT status, COUNT(*) AS order_count
 FROM orders
-GROUP BY status;
+GROUP BY status
+ORDER BY order_count DESC;
+```
 
--- Total revenue per user
-SELECT user_id, SUM(total_amount) AS total_spent
+Result:
+```
+status      | order_count
+------------|-------------
+completed   | 890
+pending     | 45
+processing  | 23
+cancelled   | 15
+```
+
+**QA use case — Verify API filter totals match the database:**
+The API `GET /api/orders?status=pending` returns 45 results. Verify:
+```sql
+SELECT status, COUNT(*) AS count
+FROM orders
+GROUP BY status
+HAVING status = 'pending';
+-- Should return 45 — matches API response count
+```
+
+**QA use case — Verify revenue totals per user:**
+```sql
+SELECT user_id, COUNT(*) AS order_count, SUM(total_amount) AS total_spent
 FROM orders
 WHERE status = 'completed'
 GROUP BY user_id
 ORDER BY total_spent DESC;
+-- Cross-check against the "User Spending Report" API endpoint
+```
 
--- Orders per day
-SELECT DATE(created_at) AS order_date, COUNT(*) AS orders_count
+**QA use case — Count orders per day to verify time-based reporting:**
+```sql
+SELECT DATE(created_at) AS order_date, COUNT(*) AS daily_count
 FROM orders
+WHERE created_at >= '2024-01-01' AND created_at < '2024-02-01'
 GROUP BY DATE(created_at)
 ORDER BY order_date;
 ```
 
-### HAVING — Filter Groups (WHERE applied after GROUP BY)
+---
+
+**Q12: What is HAVING? How is it different from WHERE?**
+
+**A:** Both filter rows, but they apply at different stages:
+
+- `WHERE` filters **individual rows** before grouping happens
+- `HAVING` filters **groups** after GROUP BY has been applied
+
+You cannot use aggregate functions (COUNT, SUM, etc.) in a WHERE clause — that is what HAVING is for.
 
 ```sql
--- Users who have spent more than $500 total
+-- WHERE filters rows BEFORE grouping
+SELECT status, COUNT(*) AS count
+FROM orders
+WHERE created_at >= '2024-01-01'   -- filter: only January orders
+GROUP BY status                     -- then group
+HAVING COUNT(*) > 10;              -- then filter: only statuses with more than 10 orders
+```
+
+**QA example — Find email addresses that appear more than once (duplicate check):**
+```sql
+SELECT email, COUNT(*) AS occurrence_count
+FROM users
+GROUP BY email
+HAVING COUNT(*) > 1
+ORDER BY occurrence_count DESC;
+-- Expected: 0 rows (email should be unique)
+-- Any results = duplicate email addresses exist, UNIQUE constraint may be missing
+```
+
+**QA example — Find users who have spent more than $1000 (for loyalty tier testing):**
+```sql
 SELECT user_id, SUM(total_amount) AS total_spent
 FROM orders
+WHERE status = 'completed'
 GROUP BY user_id
-HAVING SUM(total_amount) > 500;
+HAVING SUM(total_amount) > 1000;
+-- Verify these users have the correct loyalty tier in the users table
+```
 
--- Product categories with more than 100 orders
-SELECT category, COUNT(*) AS order_count
-FROM orders o
-INNER JOIN products p ON o.product_id = p.id
-GROUP BY category
-HAVING COUNT(*) > 100;
+**Key rule:** If you can use WHERE, use WHERE — it is faster because it reduces the number of rows before grouping. Use HAVING only when you need to filter on an aggregate value.
 
--- Find email addresses with duplicates (more than 1 occurrence)
+---
+
+**Q13: How do you count records and verify totals using SQL?**
+
+**A:** Use `COUNT(*)` for rows, `SUM()` for totals, and always compare against what the API reports.
+
+```sql
+-- Count all rows in a table
+SELECT COUNT(*) FROM users;
+
+-- Count rows matching a condition
+SELECT COUNT(*) FROM users WHERE status = 'active';
+
+-- Count non-NULL values in a column (ignores NULLs)
+SELECT COUNT(email) FROM users;
+
+-- Count distinct values
+SELECT COUNT(DISTINCT user_id) FROM orders;
+
+-- Sum of a numeric column
+SELECT SUM(total_amount) FROM orders WHERE status = 'completed';
+
+-- Average, min, max
+SELECT AVG(total_amount), MIN(total_amount), MAX(total_amount) FROM orders;
+```
+
+**QA verification pattern:**
+```sql
+-- API claims GET /api/orders returns { meta: { total: 892 } }
+-- Verify:
+SELECT COUNT(*) AS total FROM orders;
+-- Must equal 892
+
+-- API claims GET /api/users?status=active returns 150 users
+SELECT COUNT(*) FROM users WHERE status = 'active' AND deleted_at IS NULL;
+-- Must equal 150
+```
+
+**Multi-column verification:**
+```sql
+SELECT
+  COUNT(*) AS total_orders,
+  COUNT(CASE WHEN status = 'completed' THEN 1 END) AS completed,
+  COUNT(CASE WHEN status = 'pending' THEN 1 END) AS pending,
+  SUM(CASE WHEN status = 'completed' THEN total_amount ELSE 0 END) AS completed_revenue
+FROM orders;
+```
+
+---
+
+**Q14: How do you find duplicate records in a table?**
+
+**A:** Use `GROUP BY` on the column(s) that should be unique, then use `HAVING COUNT(*) > 1` to find groups with more than one occurrence.
+
+**Find duplicate emails:**
+```sql
 SELECT email, COUNT(*) AS count
 FROM users
 GROUP BY email
+HAVING COUNT(*) > 1
+ORDER BY count DESC;
+```
+
+**Find the actual duplicate rows (not just the email):**
+```sql
+SELECT id, name, email, created_at
+FROM users
+WHERE email IN (
+  SELECT email FROM users
+  GROUP BY email
+  HAVING COUNT(*) > 1
+)
+ORDER BY email, created_at;
+```
+
+**Find duplicate order_items (same order and product should not appear twice):**
+```sql
+SELECT order_id, product_id, COUNT(*) AS duplicate_count
+FROM order_items
+GROUP BY order_id, product_id
+HAVING COUNT(*) > 1;
+-- Expected: 0 rows
+```
+
+**Find completely identical rows:**
+```sql
+SELECT name, email, role, status, COUNT(*) AS row_count
+FROM users
+GROUP BY name, email, role, status
 HAVING COUNT(*) > 1;
 ```
 
-**Key distinction**: `WHERE` filters rows **before** grouping. `HAVING` filters groups **after** grouping.
+**QA context:** Duplicate detection is critical after bulk imports, registration testing (rapid double-submits), and migration testing. A missing UNIQUE constraint will show up here before it shows up in production.
+
+---
+
+## SECTION 5 — NULL HANDLING
+
+---
+
+**Q15: What is NULL in SQL? What is the "NULL trap"?**
+
+**A:** NULL in SQL represents the absence of a value — it is not zero, not an empty string, and not false. It literally means "unknown" or "not applicable."
+
+The NULL trap is a set of counterintuitive behaviours that catch both developers and QA engineers:
+
+1. **Arithmetic with NULL always returns NULL:**
+   ```sql
+   SELECT 5 + NULL;     -- returns NULL (not 5)
+   SELECT NULL * 100;   -- returns NULL (not 0)
+   ```
+
+2. **Comparison with NULL always returns NULL (not true or false):**
+   ```sql
+   SELECT NULL = NULL;   -- returns NULL (not TRUE!)
+   SELECT NULL != 5;     -- returns NULL (not TRUE)
+   ```
+
+3. **NULL in NOT IN breaks the entire query** (covered in Q17)
+
+4. **COUNT(column) ignores NULLs:**
+   ```sql
+   -- Table has 5 rows. 2 rows have email = NULL.
+   SELECT COUNT(*) FROM users;       -- returns 5
+   SELECT COUNT(email) FROM users;   -- returns 3 (ignores NULL)
+   ```
+
+5. **Aggregates ignore NULLs:**
+   ```sql
+   -- Scores: 10, 20, NULL, 30
+   SELECT AVG(score) FROM tests;  -- returns 20 (average of 10, 20, 30 — NULL ignored)
+   ```
+
+**QA implication:** When verifying that a required field is always populated, use `COUNT(*)` vs `COUNT(column)` discrepancy as a check, or directly check for NULLs with `IS NULL`.
+
+---
+
+**Q16: What is the difference between IS NULL and = NULL?**
+
+**A:** This is one of the most important rules in SQL and a common interview trap:
+
+- `= NULL` **never works** — it always returns 0 rows, even when NULLs exist
+- `IS NULL` is the correct way to check for NULL values
 
 ```sql
--- WHERE filters rows first, then GROUP BY groups, then HAVING filters groups
-SELECT status, COUNT(*) AS count
-FROM orders
-WHERE created_at >= '2024-01-01'    -- filter rows first
-GROUP BY status                      -- then group
-HAVING COUNT(*) > 10;               -- then filter groups
+-- WRONG — always returns 0 rows, even if phone column has NULLs
+SELECT * FROM users WHERE phone = NULL;
+
+-- ALSO WRONG — always returns 0 rows
+SELECT * FROM users WHERE phone != NULL;
+
+-- CORRECT — finds rows where phone has no value
+SELECT * FROM users WHERE phone IS NULL;
+
+-- CORRECT — finds rows where phone has any value
+SELECT * FROM users WHERE phone IS NOT NULL;
+```
+
+**Why does this happen?**
+NULL represents "unknown." The expression `NULL = NULL` asks "is unknown equal to unknown?" — the answer is "unknown" (NULL), not TRUE. SQL cannot evaluate equality with an unknown value.
+
+**QA scenarios where this matters:**
+```sql
+-- Verify deleted_at was set after soft delete
+SELECT id FROM users WHERE id = 101 AND deleted_at IS NOT NULL;
+-- If you wrote deleted_at != NULL this would return 0 rows even when it IS set
+
+-- Find users with no phone on file
+SELECT id, name FROM users WHERE phone IS NULL;
+
+-- Verify all orders have a shipping address (required field check)
+SELECT COUNT(*) FROM orders WHERE shipping_address IS NULL;
+-- Expected: 0
 ```
 
 ---
 
-## 5. NULL Handling
+**Q17: How does NOT IN behave with NULL values? What is the gotcha?**
 
-### IS NULL / IS NOT NULL
+**A:** This is one of the most dangerous traps in SQL. If a subquery used with `NOT IN` returns even a single NULL value, the entire `NOT IN` expression returns NO rows — even rows that logically should match.
 
+**Example:**
 ```sql
--- Find users with no phone number set
-SELECT id, name, email FROM users WHERE phone IS NULL;
+-- Table: orders has rows with user_id: 1, 2, NULL, 4
 
--- Find orders with a shipping date (not null)
-SELECT id, status FROM orders WHERE shipped_at IS NOT NULL;
+-- This looks like it should find users not in the orders table:
+SELECT * FROM users WHERE id NOT IN (SELECT user_id FROM orders);
 
--- Wrong — this does NOT work for NULL comparison:
-SELECT * FROM users WHERE phone = NULL;    -- ALWAYS returns 0 rows
-SELECT * FROM users WHERE phone != NULL;  -- ALWAYS returns 0 rows
+-- But if any user_id in orders is NULL, this returns 0 rows for ALL users!
+-- Because NOT IN is equivalent to: id != 1 AND id != 2 AND id != NULL AND id != 4
+-- AND id != NULL is always NULL (unknown), which makes the whole AND chain NULL/false
 ```
 
-**Key rule**: NULL is not a value — it is the absence of a value. You cannot use `= NULL` or `!= NULL`. Always use `IS NULL` or `IS NOT NULL`.
+**Fix — always add `WHERE column IS NOT NULL` in the subquery:**
+```sql
+SELECT * FROM users 
+WHERE id NOT IN (
+  SELECT user_id FROM orders WHERE user_id IS NOT NULL
+);
+-- Now safe — NULLs are excluded from the NOT IN list
+```
+
+**Alternative — use NOT EXISTS (safer and more efficient):**
+```sql
+SELECT * FROM users u
+WHERE NOT EXISTS (
+  SELECT 1 FROM orders o WHERE o.user_id = u.id
+);
+-- NOT EXISTS handles NULLs correctly and is generally more performant
+```
+
+**When to remember this:** Any time you write `NOT IN (SELECT ...)` — always add `WHERE column IS NOT NULL` to the subquery. This is a common source of subtle test failures where a query unexpectedly returns 0 rows.
 
 ---
 
-### COALESCE — Return First Non-NULL Value
+**Q18: What is COALESCE and when do you use it in database testing?**
+
+**A:** `COALESCE` returns the first non-NULL value from a list of arguments. It is used to handle NULLs gracefully — replacing them with a default value for display or calculation.
 
 ```sql
--- If discount is NULL, show 0
-SELECT id, name, COALESCE(discount, 0) AS discount FROM products;
+-- Syntax: COALESCE(value1, value2, value3, ...)
+-- Returns the first non-NULL value
 
--- First non-null value from multiple columns
+-- Replace NULL discount with 0
+SELECT id, price, COALESCE(discount, 0) AS discount FROM products;
+
+-- Use first available display name
 SELECT id, COALESCE(nickname, first_name, 'Unknown') AS display_name FROM users;
 
--- QA use: verify default values are applied
-SELECT id, status, COALESCE(deleted_at, 'not deleted') AS deletion_status
-FROM users;
+-- Prevent NULL in calculations
+SELECT id, price * (1 - COALESCE(discount_rate, 0)) AS final_price FROM products;
 ```
+
+**QA use cases:**
+
+1. **Verify default values are applied by the application:**
+   ```sql
+   SELECT id, COALESCE(status, 'NO_DEFAULT') AS status_check FROM users;
+   -- If any row shows 'NO_DEFAULT', the application is not setting the default status
+   ```
+
+2. **Verify soft-delete status display:**
+   ```sql
+   SELECT id, name, COALESCE(deleted_at, 'active') AS deletion_status
+   FROM users WHERE id IN (101, 102, 103);
+   ```
+
+3. **Safe calculation without division by zero:**
+   ```sql
+   SELECT order_id, total / NULLIF(item_count, 0) AS avg_item_price
+   FROM orders;
+   -- NULLIF returns NULL when item_count = 0, preventing division by zero error
+   ```
 
 ---
 
-### NULLIF — Returns NULL if Two Values Are Equal
-
-```sql
--- Returns NULL if denominator is 0 (avoid division by zero)
-SELECT NULLIF(0, 0)      -- returns NULL
-SELECT NULLIF(5, 0)      -- returns 5
-
--- Safe division
-SELECT total_sales / NULLIF(total_orders, 0) AS avg_order_value FROM summary;
-```
+## SECTION 6 — STRING FUNCTIONS
 
 ---
 
-## 6. String Functions
+**Q19: What string functions do QA engineers use most often? Cover LIKE, UPPER, LOWER, TRIM, LENGTH, CONCAT.**
 
+**A:** String functions allow you to search, transform, and validate text data in the database.
+
+**LIKE — pattern matching:**
 ```sql
--- LIKE — pattern matching
-SELECT * FROM users WHERE email LIKE '%@gmail.com';        -- ends with
-SELECT * FROM users WHERE name LIKE 'A%';                  -- starts with A
-SELECT * FROM users WHERE name LIKE '%Smith%';             -- contains
-SELECT * FROM products WHERE sku LIKE 'PROD-___';          -- _ matches any single char
+-- % matches any sequence of characters
+SELECT * FROM users WHERE email LIKE '%@gmail.com';     -- ends with @gmail.com
+SELECT * FROM users WHERE name LIKE 'A%';               -- starts with A
+SELECT * FROM users WHERE name LIKE '%Smith%';          -- contains Smith
 
--- Case-insensitive search (MySQL default is case-insensitive; PostgreSQL use ILIKE)
-SELECT * FROM users WHERE name ILIKE 'alice%';             -- PostgreSQL
+-- _ matches exactly one character
+SELECT * FROM products WHERE sku LIKE 'PROD-___';       -- PROD- followed by exactly 3 chars
 
--- Case conversion
-SELECT UPPER(email) FROM users;          -- 'ALICE@EXAMPLE.COM'
-SELECT LOWER(name) FROM users;           -- 'alice smith'
+-- QA use: Find all test data rows (tagged with test domain)
+SELECT * FROM users WHERE email LIKE '%@qa.com%';
 
--- TRIM — remove leading/trailing whitespace
-SELECT TRIM(' Alice ');                  -- 'Alice'
-SELECT LTRIM(name) FROM users;          -- left trim
-SELECT RTRIM(name) FROM users;          -- right trim
-
--- LENGTH / LEN
-SELECT LENGTH(email) FROM users;        -- MySQL / PostgreSQL
-SELECT LEN(email) FROM users;           -- SQL Server
-
--- CONCAT
-SELECT CONCAT(first_name, ' ', last_name) AS full_name FROM users;
-SELECT first_name || ' ' || last_name AS full_name FROM users;  -- PostgreSQL
-
--- SUBSTRING / SUBSTR
-SELECT SUBSTRING(phone, 1, 3) AS area_code FROM users;   -- first 3 chars
-
--- REPLACE
-SELECT REPLACE(phone, '-', '') AS clean_phone FROM users;
-
--- QA Use: Verify email format
+-- QA use: Validate email format (basic check)
 SELECT id, email FROM users WHERE email NOT LIKE '%_@_%._%';
--- Finds emails that don't match basic pattern (missing @, missing domain, etc.)
+-- Finds emails that don't match the pattern: something@something.tld
+```
+
+**UPPER / LOWER — case conversion:**
+```sql
+-- Normalize for case-insensitive comparison
+SELECT * FROM users WHERE LOWER(email) = 'alice@example.com';
+-- Finds alice@example.com, ALICE@EXAMPLE.COM, Alice@Example.COM
+
+-- QA use: verify email is stored in lowercase (if that is the requirement)
+SELECT id, email FROM users WHERE email != LOWER(email);
+-- Any rows returned = email stored with uppercase characters — potential bug
+```
+
+**TRIM — remove leading/trailing whitespace:**
+```sql
+SELECT TRIM('  Alice  ');    -- 'Alice'
+SELECT LTRIM('  Alice');     -- 'Alice' (left only)
+SELECT RTRIM('Alice  ');     -- 'Alice' (right only)
+
+-- QA use: detect data with accidental whitespace (common import bug)
+SELECT id, name FROM users WHERE name != TRIM(name);
+-- Any rows = names have leading or trailing spaces — validation bug
+```
+
+**LENGTH — string length:**
+```sql
+-- MySQL/PostgreSQL
+SELECT id, name, LENGTH(name) AS name_length FROM users;
+
+-- QA use: verify field length constraints are enforced
+SELECT id, name FROM users WHERE LENGTH(name) > 100;
+-- If the DB column is VARCHAR(100), these rows indicate a constraint bypass
+
+-- Verify phone numbers are correct length (10 digits)
+SELECT id, phone FROM users WHERE LENGTH(REPLACE(phone, '-', '')) != 10;
+```
+
+**CONCAT — combine strings:**
+```sql
+SELECT CONCAT(first_name, ' ', last_name) AS full_name FROM users;
+
+-- QA use: build test assertions
+SELECT CONCAT('User ', id, ': ', name, ' (', email, ')') AS user_info FROM users;
 ```
 
 ---
 
-## 7. Date and Time Functions
+## SECTION 7 — DATE FUNCTIONS
 
+---
+
+**Q20: What date functions do QA engineers commonly use? Cover NOW(), DATE(), DATEDIFF().**
+
+**A:** Date functions are essential for verifying time-sensitive data like creation timestamps, expiry dates, session lengths, and scheduled events.
+
+**Getting current date and time:**
 ```sql
--- Current date and time
-SELECT NOW();               -- '2024-01-15 14:30:00' (MySQL / PostgreSQL)
-SELECT CURDATE();           -- '2024-01-15' (MySQL) / CURRENT_DATE (PostgreSQL)
-SELECT CURTIME();           -- '14:30:00' (MySQL)
-SELECT GETDATE();           -- SQL Server
+SELECT NOW();           -- '2024-01-15 14:30:22' — MySQL/PostgreSQL
+SELECT CURDATE();       -- '2024-01-15' — MySQL date only
+SELECT CURRENT_DATE;    -- PostgreSQL/standard SQL
+SELECT GETDATE();       -- SQL Server
+```
 
--- Extract parts of a date
-SELECT DATE(created_at) FROM orders;           -- extract date part only
-SELECT YEAR(created_at) FROM orders;           -- 2024
-SELECT MONTH(created_at) FROM orders;          -- 1
-SELECT DAY(created_at) FROM orders;            -- 15
+**Extracting parts of a date:**
+```sql
+SELECT DATE(created_at) FROM orders;        -- '2024-01-15' (date part only)
+SELECT YEAR(created_at) FROM orders;        -- 2024
+SELECT MONTH(created_at) FROM orders;       -- 1
+SELECT DAY(created_at) FROM orders;         -- 15
+SELECT HOUR(created_at) FROM orders;        -- 14
+```
 
--- Date arithmetic
-SELECT DATE_ADD(NOW(), INTERVAL 7 DAY);        -- 7 days from now (MySQL)
-SELECT DATE_SUB(NOW(), INTERVAL 30 DAY);       -- 30 days ago (MySQL)
-SELECT NOW() + INTERVAL '7 days';              -- PostgreSQL
+**Date arithmetic:**
+```sql
+-- MySQL
+SELECT DATE_ADD(NOW(), INTERVAL 7 DAY);      -- 7 days in the future
+SELECT DATE_SUB(NOW(), INTERVAL 30 DAY);     -- 30 days ago
 
--- DATEDIFF — difference between dates
-SELECT DATEDIFF('2024-01-31', '2024-01-01');   -- 30 (MySQL — returns days)
-SELECT DATEDIFF(day, '2024-01-01', '2024-01-31');  -- SQL Server
+-- PostgreSQL
+SELECT NOW() + INTERVAL '7 days';
+SELECT NOW() - INTERVAL '30 days';
+```
 
--- DATE_FORMAT (MySQL) / TO_CHAR (PostgreSQL)
-SELECT DATE_FORMAT(created_at, '%Y-%m-%d') FROM orders;        -- '2024-01-15'
-SELECT DATE_FORMAT(created_at, '%d/%m/%Y %H:%i') FROM orders;  -- '15/01/2024 14:30'
-SELECT TO_CHAR(created_at, 'YYYY-MM-DD HH24:MI:SS') FROM orders;  -- PostgreSQL
+**DATEDIFF:**
+```sql
+-- MySQL: returns number of days between two dates
+SELECT DATEDIFF('2024-01-31', '2024-01-01');   -- 30
 
--- QA Use: Find records created in last 24 hours
-SELECT * FROM transactions WHERE created_at >= NOW() - INTERVAL 1 DAY;   -- MySQL
-SELECT * FROM transactions WHERE created_at >= NOW() - INTERVAL '1 day'; -- PostgreSQL
+-- SQL Server: specify unit
+SELECT DATEDIFF(day, '2024-01-01', '2024-01-31');  -- 30
+```
 
--- QA Use: Check records created today
+**QA use cases:**
+```sql
+-- Find records created in the last 24 hours (verify recent API calls)
+SELECT * FROM orders WHERE created_at >= NOW() - INTERVAL 1 DAY;    -- MySQL
+SELECT * FROM orders WHERE created_at >= NOW() - INTERVAL '1 day';  -- PostgreSQL
+
+-- Verify records created today (testing daily batch jobs)
 SELECT * FROM orders WHERE DATE(created_at) = CURDATE();
 
--- QA Use: Find records older than 90 days (for data retention checks)
-SELECT * FROM audit_logs WHERE created_at < DATE_SUB(NOW(), INTERVAL 90 DAY);
+-- Check password reset tokens are not expired (e.g., 24-hour expiry)
+SELECT id, token, expires_at FROM password_resets
+WHERE expires_at < NOW();
+-- Any rows = expired tokens that should have been cleaned up
+
+-- Verify session timeout is correctly enforced (30-minute sessions)
+SELECT id FROM sessions
+WHERE last_activity < NOW() - INTERVAL 30 MINUTE AND status = 'active';
+-- Should return 0 — active sessions older than 30 min should be expired
 ```
 
 ---
 
-## 8. Subqueries and IN / NOT IN
+## SECTION 8 — SUBQUERIES AND IN vs EXISTS
 
-### Subquery in WHERE
+---
 
+**Q21: What is a subquery? Give a QA example.**
+
+**A:** A subquery is a query nested inside another query. The inner query runs first and its result is used by the outer query. Subqueries allow you to express complex filtering logic that cannot be done with a single-level query.
+
+**Subquery in WHERE — find users who have placed at least one order:**
 ```sql
--- Find users who have placed at least one order
 SELECT id, name, email FROM users
 WHERE id IN (SELECT DISTINCT user_id FROM orders);
-
--- Find users who have NEVER placed an order
-SELECT id, name, email FROM users
-WHERE id NOT IN (SELECT DISTINCT user_id FROM orders WHERE user_id IS NOT NULL);
--- Note: NOT IN returns no rows if the subquery contains any NULL values — always add WHERE user_id IS NOT NULL
 ```
 
-### Correlated Subquery
-
+**Subquery in WHERE — find users who have NEVER placed an order:**
 ```sql
--- Find users whose most recent order was more than 6 months ago (lapsed users)
+SELECT id, name, email FROM users
+WHERE id NOT IN (
+  SELECT DISTINCT user_id FROM orders WHERE user_id IS NOT NULL
+);
+-- Note: always add WHERE user_id IS NOT NULL to subquery used with NOT IN
+```
+
+**Correlated subquery — users whose last order was over 6 months ago:**
+```sql
 SELECT u.id, u.name, u.email
 FROM users u
 WHERE (
-  SELECT MAX(created_at)
-  FROM orders o
-  WHERE o.user_id = u.id
+  SELECT MAX(created_at) FROM orders o WHERE o.user_id = u.id
 ) < DATE_SUB(NOW(), INTERVAL 6 MONTH);
 ```
+A correlated subquery runs once per row of the outer query — it references the outer query's row (`u.id`). Useful but slower than a JOIN for large datasets.
 
-### Subquery in FROM (Derived Table)
-
+**Derived table (subquery in FROM):**
 ```sql
 -- Average order count per user
 SELECT AVG(order_count) AS avg_orders_per_user
@@ -495,173 +968,372 @@ FROM (
   SELECT user_id, COUNT(*) AS order_count
   FROM orders
   GROUP BY user_id
-) AS user_order_counts;
+) AS user_counts;
 ```
 
-### EXISTS vs IN
+**QA context:** Use subqueries to build complex verification queries that check cross-table business rules without having to write multiple separate queries.
 
+---
+
+**Q22: What is the difference between IN and EXISTS? When do you use each?**
+
+**A:** Both check for the existence of related records, but they work differently and have different performance characteristics.
+
+**IN** — returns the full subquery result set, then checks membership:
 ```sql
--- EXISTS — more efficient for large datasets, stops at first match
+SELECT id, name FROM users
+WHERE id IN (SELECT user_id FROM orders WHERE status = 'completed');
+-- Executes inner query once, gets all matching user_ids, then filters users
+```
+
+**EXISTS** — stops at the first matching row (short-circuit):
+```sql
 SELECT id, name FROM users u
 WHERE EXISTS (
   SELECT 1 FROM orders o WHERE o.user_id = u.id AND o.status = 'completed'
 );
+-- For each user, checks if even one matching order exists, stops immediately when found
+```
 
--- NOT EXISTS — find users with no completed orders
+**When to use which:**
+
+| Situation | Recommended | Why |
+|---|---|---|
+| Small result set from subquery | IN | Simple, readable |
+| Large result set from subquery | EXISTS | More efficient — stops at first match |
+| NULL values might be in subquery | EXISTS | Safer — EXISTS handles NULLs correctly |
+| NOT IN scenario with NULLs | NOT EXISTS | NOT IN fails with NULLs; NOT EXISTS is safe |
+| Multiple columns to compare | EXISTS | IN can only compare one column (unless tuples) |
+
+**NOT EXISTS — the safe alternative to NOT IN:**
+```sql
+-- SAFER than NOT IN when NULLs may exist:
 SELECT id, name FROM users u
 WHERE NOT EXISTS (
   SELECT 1 FROM orders o WHERE o.user_id = u.id
 );
+-- Returns users with zero orders — correctly handles any NULLs in orders.user_id
 ```
 
 ---
 
-## 9. INSERT, UPDATE, DELETE — Test Data Management
+## SECTION 9 — INSERT, UPDATE, DELETE, TRANSACTIONS
 
-### INSERT
+---
+
+**Q23: What is INSERT? How do you create test data with SQL?**
+
+**A:** `INSERT` adds new rows to a table. QA engineers use INSERT to set up preconditions before a test — creating the specific data state needed to exercise a particular code path.
 
 ```sql
 -- Insert a single row
 INSERT INTO users (name, email, role, status, created_at)
-VALUES ('QA Test User', 'qa_test_1@example.com', 'viewer', 'active', NOW());
+VALUES ('QA Test User', 'qa_test_001@qa.com', 'viewer', 'active', NOW());
 
--- Insert multiple rows at once
+-- Insert multiple rows in one statement (faster than multiple INSERTs)
 INSERT INTO users (name, email, role, status) VALUES
-  ('Test User 1', 'test1@qa.com', 'viewer', 'active'),
-  ('Test User 2', 'test2@qa.com', 'admin', 'active'),
-  ('Test User 3', 'test3@qa.com', 'viewer', 'inactive');
+  ('Test Admin',   'test_admin@qa.com',   'admin',  'active'),
+  ('Test Viewer',  'test_viewer@qa.com',  'viewer', 'active'),
+  ('Test Inactive','test_inactive@qa.com','viewer', 'inactive');
 
--- Insert and retrieve the auto-generated ID
+-- Insert and immediately get the generated ID (MySQL)
 INSERT INTO users (name, email) VALUES ('New User', 'new@qa.com');
-SELECT LAST_INSERT_ID();   -- MySQL
-SELECT lastval();          -- PostgreSQL (after INSERT into sequence table)
+SELECT LAST_INSERT_ID();   -- returns the auto-generated ID
+
+-- PostgreSQL: RETURNING clause
+INSERT INTO users (name, email) VALUES ('New User', 'new@qa.com')
+RETURNING id;
 ```
 
-### UPDATE
-
+**Best practice for test data — use a recognisable pattern so you can clean up:**
 ```sql
--- Update a single record
-UPDATE users SET status = 'inactive' WHERE id = 101;
+-- Use a test-specific email domain
+INSERT INTO users (name, email) VALUES ('Test User', 'test_auto_20240115@qa.com');
 
--- Update multiple columns
-UPDATE orders
-SET status = 'shipped', shipped_at = NOW(), tracking_number = 'TRK123'
-WHERE id = 50;
-
--- Update with calculation
-UPDATE products SET price = price * 0.9 WHERE category = 'Electronics';
-
--- IMPORTANT — Always include WHERE in UPDATE. Without it, all rows are updated.
-```
-
-### DELETE
-
-```sql
--- Delete a specific record
-DELETE FROM users WHERE id = 101;
-
--- Delete multiple records
-DELETE FROM test_orders WHERE email LIKE '%@qa.com%';
-
--- Delete with JOIN (MySQL syntax)
-DELETE u FROM users u
-INNER JOIN test_sessions ts ON u.id = ts.user_id
-WHERE ts.is_test = 1;
-
--- IMPORTANT — Always include WHERE in DELETE. Without it, all rows are deleted.
-```
-
-### ROLLBACK — Undo Test Data Changes
-
-```sql
--- Wrap test data operations in a transaction so you can undo them
-BEGIN;                        -- Start transaction (MySQL: START TRANSACTION)
-
-INSERT INTO users (name, email) VALUES ('Temp Test User', 'temp@qa.com');
-UPDATE orders SET status = 'cancelled' WHERE id = 999;
-
--- If test passed and you want to clean up:
-ROLLBACK;   -- Undo all changes since BEGIN
-
--- If you want to keep the changes:
-COMMIT;
+-- Later, clean up all test data easily
+DELETE FROM users WHERE email LIKE 'test_auto_%@qa.com';
 ```
 
 ---
 
-## 10. TRUNCATE vs DELETE
+**Q24: What is UPDATE? How do you fix or adjust test data?**
+
+**A:** `UPDATE` modifies existing rows. In testing, you use UPDATE to set up specific data states that are difficult to reach through the API, or to reset data to a known state between tests.
+
+```sql
+-- Update a single column
+UPDATE users SET status = 'inactive' WHERE id = 101;
+
+-- Update multiple columns at once
+UPDATE orders
+SET status = 'shipped', shipped_at = NOW(), tracking_number = 'TRK-TEST-123'
+WHERE id = 50;
+
+-- Update with a calculation
+UPDATE products SET price = price * 0.9 WHERE category = 'Electronics';
+
+-- Update based on a subquery
+UPDATE users SET role = 'premium'
+WHERE id IN (
+  SELECT user_id FROM orders
+  GROUP BY user_id
+  HAVING SUM(total_amount) > 1000
+);
+```
+
+**Critical rule: ALWAYS include a WHERE clause in UPDATE.** Without WHERE, every single row in the table is updated:
+```sql
+-- DANGER: Updates every user's status to inactive
+UPDATE users SET status = 'inactive';
+
+-- CORRECT: Updates only the specific user
+UPDATE users SET status = 'inactive' WHERE id = 101;
+```
+
+**QA use case — reset a user's failed login count before testing lockout logic:**
+```sql
+UPDATE users SET failed_login_attempts = 0, locked_until = NULL WHERE id = 101;
+-- Reset state to test the lockout flow from scratch
+```
+
+---
+
+**Q25: What is DELETE? How do you clean up test data?**
+
+**A:** `DELETE` removes rows from a table. QA engineers use DELETE in test teardown to remove test data created during a test, keeping the database clean for subsequent tests.
+
+```sql
+-- Delete a specific row
+DELETE FROM users WHERE id = 101;
+
+-- Delete using a pattern (test data cleanup)
+DELETE FROM users WHERE email LIKE 'test_auto_%@qa.com';
+
+-- Delete with a date condition
+DELETE FROM sessions WHERE created_at < NOW() - INTERVAL 7 DAY;
+
+-- Delete related records (must respect foreign key order)
+-- Delete child records before parent records
+DELETE FROM order_items WHERE order_id IN (
+  SELECT id FROM orders WHERE user_id = 101
+);
+DELETE FROM orders WHERE user_id = 101;
+DELETE FROM users WHERE id = 101;
+```
+
+**Critical rule: ALWAYS include a WHERE clause in DELETE.** Without WHERE, every row in the table is deleted:
+```sql
+-- DANGER: Deletes every row in the table
+DELETE FROM users;
+
+-- CORRECT: Deletes only the test user
+DELETE FROM users WHERE email = 'test_auto@qa.com';
+```
+
+**MySQL syntax for DELETE with JOIN:**
+```sql
+DELETE u FROM users u
+INNER JOIN test_sessions ts ON u.id = ts.user_id
+WHERE ts.is_test = TRUE;
+```
+
+---
+
+**Q26: What is the difference between TRUNCATE and DELETE?**
+
+**A:** Both remove rows from a table, but they work very differently:
 
 | Aspect | TRUNCATE | DELETE |
 |---|---|---|
-| Speed | Much faster | Slower (row-by-row logging) |
-| WHERE clause | Not supported | Supported |
-| Rows affected | All rows removed | Specified rows (or all if no WHERE) |
-| Transaction rollback | Not rollback-able in most DBs | Can be rolled back within a transaction |
-| Resets AUTO_INCREMENT | Yes | No |
-| Triggers | Does NOT fire row-level triggers | Fires DELETE triggers |
-| Foreign Keys | Fails if FK constraints exist | Fails if FK constraints exist (unless cascaded) |
-| Use Case | Clear entire table fast (test data reset) | Remove specific rows |
+| WHERE clause | Not supported — removes ALL rows | Supported — can remove specific rows |
+| Speed | Very fast — drops and recreates pages | Slower — logs each row deletion |
+| Rollback | Cannot be rolled back in most databases (DDL) | Can be rolled back within a transaction |
+| Resets AUTO_INCREMENT | Yes — ID counter resets to 1 | No — counter continues from where it was |
+| Fires triggers | No (row-level triggers do not fire) | Yes — DELETE triggers fire for each row |
+| Foreign key check | Fails if FK constraints reference the table | Fails if FK constraints reference the rows |
+| Logged | Minimal logging (page deallocation) | Fully logged (every row) |
 
 ```sql
--- TRUNCATE — removes all rows, resets identity counter
+-- TRUNCATE — removes all rows fast, resets ID sequence
 TRUNCATE TABLE test_users;
 
--- DELETE without WHERE — removes all rows but is logged row by row
+-- DELETE without WHERE — removes all rows but logs each one
 DELETE FROM test_users;
 
--- DELETE with WHERE — removes specific rows
+-- DELETE with WHERE — removes only matching rows
 DELETE FROM users WHERE email LIKE '%@qa.com%';
 ```
 
-**QA Rule**: Use `TRUNCATE` to clear entire test/staging tables between test runs. Use `DELETE WHERE` to clean up specific test records created during a test.
+**QA decision guide:**
+- Use `TRUNCATE` to fully reset a test table between test suites (fast, resets IDs to 1)
+- Use `DELETE WHERE email LIKE 'test_%'` to clean up only the specific test data created by a test run
+- Never TRUNCATE a table with foreign key constraints without disabling them first
 
 ---
 
-## 11. Real QA SQL Scenarios — 10 Practical Examples
+**Q27: What is a transaction in SQL? What are COMMIT and ROLLBACK?**
 
----
-
-### Scenario 1: Verify a User Was Created After POST /users API Call
+**A:** A transaction is a sequence of SQL operations treated as a single logical unit. Either all operations succeed (COMMIT) or all are undone (ROLLBACK). No partial updates are possible within a transaction.
 
 ```sql
--- After calling POST /api/users with body { name: "Alice Test", email: "alice.test@example.com" }
--- Verify the row exists in the database with correct values
+-- Start a transaction
+BEGIN;  -- or START TRANSACTION in MySQL
 
+-- Perform multiple operations
+UPDATE accounts SET balance = balance - 100 WHERE id = 1;  -- debit Alice
+UPDATE accounts SET balance = balance + 100 WHERE id = 2;  -- credit Bob
+
+-- If both succeed, make it permanent
+COMMIT;
+
+-- If anything goes wrong, undo everything
+ROLLBACK;
+-- Both accounts return to their original balances
+```
+
+**QA use case — wrap test data in a transaction for clean isolation:**
+```sql
+BEGIN;
+
+-- Set up test state
+INSERT INTO users (name, email) VALUES ('Temp Test User', 'temp@test.com');
+UPDATE orders SET status = 'processing' WHERE id = 50;
+
+-- Run test verifications...
+SELECT * FROM users WHERE email = 'temp@test.com';
+
+-- After test, undo all changes regardless of pass/fail
+ROLLBACK;
+-- Database is exactly as it was before the test started
+```
+
+This pattern means you never need cleanup code — the ROLLBACK handles it all.
+
+---
+
+**Q28: What is ACID? Explain each property with a test scenario.**
+
+**A:** ACID stands for Atomicity, Consistency, Isolation, and Durability — the four properties that guarantee database transactions are processed reliably.
+
+**Atomicity — all or nothing:**
+A transaction is indivisible. Either all operations within it succeed, or none of them are applied.
+
+```sql
+BEGIN;
+  UPDATE accounts SET balance = balance - 500 WHERE id = 1;
+  -- If this second UPDATE fails (e.g., account 2 doesn't exist):
+  UPDATE accounts SET balance = balance + 500 WHERE id = 999;
+ROLLBACK;  -- both changes undone — Alice gets her money back
+```
+
+QA test: Trigger a failure in the middle of a multi-step transaction. Verify the first operation was also rolled back.
+
+**Consistency — rules are always enforced:**
+A transaction brings the database from one valid state to another. Constraints (UNIQUE, NOT NULL, CHECK, FK) are never violated.
+
+QA test: Attempt to insert a user with a duplicate email. Verify the transaction is rejected and the duplicate does not exist in the DB.
+
+**Isolation — concurrent transactions do not interfere:**
+Each transaction executes as if it were the only one running. Intermediate states are invisible to other transactions.
+
+QA test: Simulate two concurrent users booking the last available seat. Verify only one succeeds — the second gets a conflict/unavailable error.
+
+**Durability — committed data survives crashes:**
+Once COMMIT executes, the data is permanently saved — even if the system crashes the next millisecond.
+
+QA test: Commit a transaction, simulate a database restart, verify the committed data is still there.
+
+**Why ACID matters for QA:**
+- Tests running in parallel can corrupt each other's data if transactions are not isolated
+- Using `BEGIN/ROLLBACK` in test teardown exploits Atomicity and isolation to keep tests independent
+- ACID guarantees give you confidence that your test data setup is deterministic
+
+---
+
+**Q29: How do you verify referential integrity using SQL?**
+
+**A:** Referential integrity means every foreign key value references a valid primary key in the parent table. You verify it using LEFT JOINs to find records with no matching parent.
+
+**Check 1 — Orders with no valid user:**
+```sql
+SELECT o.id, o.user_id, o.total_amount
+FROM orders o
+LEFT JOIN users u ON o.user_id = u.id
+WHERE u.id IS NULL;
+-- Expected: 0 rows
+```
+
+**Check 2 — Order items with no valid order:**
+```sql
+SELECT oi.id, oi.order_id
+FROM order_items oi
+LEFT JOIN orders o ON oi.order_id = o.id
+WHERE o.id IS NULL;
+-- Expected: 0 rows
+```
+
+**Check 3 — Payments with no valid order:**
+```sql
+SELECT p.id, p.order_id, p.amount
+FROM payments p
+LEFT JOIN orders o ON p.order_id = o.id
+WHERE o.id IS NULL;
+-- Expected: 0 rows
+```
+
+**Check 4 — After cascade delete, verify children were removed:**
+```sql
+-- After deleting user 101:
+SELECT COUNT(*) FROM orders WHERE user_id = 101;
+-- With CASCADE DELETE: should be 0
+-- With NO CASCADE: FK violation should have prevented the user delete
+-- Without FK constraint: orders may still exist (orphaned) — this is the bug
+```
+
+**Verify schema has FK constraints defined:**
+```sql
+-- PostgreSQL
+SELECT tc.constraint_name, tc.table_name, kcu.column_name,
+       ccu.table_name AS referenced_table, ccu.column_name AS referenced_column
+FROM information_schema.table_constraints tc
+JOIN information_schema.key_column_usage kcu ON tc.constraint_name = kcu.constraint_name
+JOIN information_schema.referential_constraints rc ON tc.constraint_name = rc.constraint_name
+JOIN information_schema.constraint_column_usage ccu ON rc.unique_constraint_name = ccu.constraint_name
+WHERE tc.constraint_type = 'FOREIGN KEY';
+```
+
+---
+
+## SECTION 10 — REAL QA SQL SCENARIOS
+
+---
+
+**Q30: Give 10 real QA SQL scenarios with complete queries. These are the kinds of situations you face daily.**
+
+**A:**
+
+**Scenario 1 — Verify user was created after POST /api/users:**
+```sql
 SELECT id, name, email, role, status, created_at
 FROM users
 WHERE email = 'alice.test@example.com'
   AND created_at >= NOW() - INTERVAL 1 MINUTE;
-
--- Expected result: 1 row returned with correct name, default role, active status
--- Failure: 0 rows = API returned 201 but didn't persist; or wrong email stored
+-- Expected: 1 row with correct values
+-- Failure: 0 rows = API returned 201 but never wrote to DB
 ```
 
----
-
-### Scenario 2: Check All Orders Have a Corresponding User (No Orphaned Orders)
-
+**Scenario 2 — Verify no orphaned orders (referential integrity check):**
 ```sql
--- After data migration or seeding, verify referential integrity:
--- Every order.user_id must correspond to a valid user
-
-SELECT o.id AS order_id, o.user_id, o.total_amount, o.status
+SELECT o.id AS order_id, o.user_id, o.total_amount
 FROM orders o
 LEFT JOIN users u ON o.user_id = u.id
 WHERE u.id IS NULL;
-
--- Expected result: 0 rows (no orphaned orders)
--- Failure: Any rows returned = orders exist with no valid parent user
--- This indicates a foreign key constraint is missing or a bug in the delete flow
+-- Expected: 0 rows
+-- Failure: rows returned = orders exist with invalid user_id
 ```
 
----
-
-### Scenario 3: Verify Payment Amount in DB Matches What API Returned
-
+**Scenario 3 — Verify payment amount in DB matches what API returned:**
 ```sql
--- After POST /api/orders returns { orderId: 12345, totalAmount: 99.99 }
--- Verify the database has the exact same amount
-
 SELECT
   o.id,
   o.total_amount AS db_total,
@@ -669,452 +1341,98 @@ SELECT
   ABS(o.total_amount - 99.99) AS difference
 FROM orders o
 WHERE o.id = 12345;
-
 -- Expected: difference = 0.00
--- Failure: difference > 0 = rounding error or wrong calculation in backend
--- Also check: tax, discount, and shipping breakdown columns
-SELECT o.id, o.subtotal, o.tax_amount, o.discount_amount, o.total_amount
-FROM orders o WHERE id = 12345;
+-- Failure: any difference > 0.01 = rounding or calculation bug
 ```
 
----
-
-### Scenario 4: Find Duplicate Email Addresses
-
+**Scenario 4 — Find duplicate email addresses after bulk import:**
 ```sql
--- After bulk user import or registration testing, check for duplicate emails
--- (email should be unique — UNIQUE constraint check)
-
-SELECT email, COUNT(*) AS occurrence_count
+SELECT email, COUNT(*) AS count
 FROM users
 GROUP BY email
 HAVING COUNT(*) > 1
-ORDER BY occurrence_count DESC;
-
--- Expected: 0 rows (no duplicates)
--- Failure: Any rows = duplicate emails exist, UNIQUE constraint may be missing
--- or application is not validating uniqueness before INSERT
-```
-
----
-
-### Scenario 5: Count Orders Per Status to Verify API Filter Works
-
-```sql
--- After testing GET /api/orders?status=pending returns 45 results
--- Verify the database actually has 45 pending orders
-
-SELECT status, COUNT(*) AS count
-FROM orders
-GROUP BY status
 ORDER BY count DESC;
-
--- Expected output (verify against API response totals):
--- pending    | 45
--- processing | 23
--- shipped    | 102
--- completed  | 890
--- cancelled  | 15
-
--- For a specific assertion:
-SELECT COUNT(*) FROM orders WHERE status = 'pending';
--- Should return 45 to match the API response
+-- Expected: 0 rows
+-- Failure: any rows = UNIQUE constraint missing or not enforced
 ```
 
----
-
-### Scenario 6: Verify a Soft-Delete Sets deleted_at and Doesn't Remove the Row
-
+**Scenario 5 — Verify API filter count matches database:**
 ```sql
--- After calling DELETE /api/users/101 (which is a soft delete in this system)
--- Verify the row still exists but deleted_at is now set
-
--- Check row still exists (NOT physically deleted)
-SELECT id, name, email, status, deleted_at
-FROM users
-WHERE id = 101;
-
--- Expected:
--- id  | name  | email           | status   | deleted_at
--- 101 | Alice | alice@test.com  | inactive | 2024-01-15 14:30:22
-
--- Failure cases:
--- 0 rows returned = hard delete (physically removed) when it should be soft delete
--- deleted_at is NULL = soft delete flag not set
--- status not updated = partial update
-
--- Also verify the user no longer appears in active users list
-SELECT COUNT(*) FROM users WHERE id = 101 AND deleted_at IS NULL;
--- Should return 0
+-- API GET /orders?status=pending returned 45 results
+SELECT COUNT(*) AS pending_count FROM orders WHERE status = 'pending';
+-- Expected: 45
 ```
 
----
-
-### Scenario 7: Check Audit Log Was Created After Update
-
+**Scenario 6 — Verify soft delete sets deleted_at without removing the row:**
 ```sql
--- After PATCH /api/users/101 (updating name)
--- Verify the audit_log table captured the change
+-- Row still exists:
+SELECT COUNT(*) FROM users WHERE id = 101;    -- should be 1
 
-SELECT
-  al.id,
-  al.entity_type,
-  al.entity_id,
-  al.action,
-  al.changed_by,
-  al.old_value,
-  al.new_value,
-  al.created_at
-FROM audit_logs al
-WHERE al.entity_type = 'user'
-  AND al.entity_id = 101
-  AND al.action = 'UPDATE'
-  AND al.created_at >= NOW() - INTERVAL 1 MINUTE
-ORDER BY al.created_at DESC
-LIMIT 1;
+-- deleted_at is set:
+SELECT deleted_at FROM users WHERE id = 101;  -- should be non-NULL timestamp
 
--- Expected: 1 row with old_value containing old name, new_value containing new name
--- Failure: 0 rows = audit logging not implemented or not triggered on update
--- Failure: old_value = new_value = values not captured correctly
+-- User excluded from active queries:
+SELECT COUNT(*) FROM users WHERE id = 101 AND deleted_at IS NULL;  -- should be 0
 ```
 
----
-
-### Scenario 8: Verify Pagination Is Returning Correct Page of Results
-
+**Scenario 7 — Verify audit log was created after an update:**
 ```sql
--- After calling GET /api/orders?page=2&limit=10 (returns 10 orders, page 2)
--- Verify the API is returning the correct 10 records (records 11–20)
-
--- First, get the 11th to 20th orders ordered the same way as the API
-SELECT id, user_id, total_amount, created_at
-FROM orders
-ORDER BY created_at DESC
-LIMIT 10 OFFSET 10;
-
--- Compare these IDs against the IDs returned by the API response
--- If API returns IDs [201, 200, 199, ...] and DB query returns same IDs = pagination is correct
--- Discrepancy = wrong ORDER BY in API, wrong OFFSET calculation, or missing sort stability
-
--- Also verify total count matches API's meta.totalCount
-SELECT COUNT(*) AS total_orders FROM orders;
--- Should match the API's { "meta": { "totalCount": 892 } }
+SELECT entity_type, entity_id, action, old_value, new_value, created_at
+FROM audit_logs
+WHERE entity_type = 'user'
+  AND entity_id = 101
+  AND action = 'UPDATE'
+  AND created_at >= NOW() - INTERVAL 1 MINUTE
+ORDER BY created_at DESC LIMIT 1;
+-- Expected: 1 row with correct old/new values
+-- Failure: 0 rows = audit logging not implemented or not triggered
 ```
 
----
-
-### Scenario 9: Find All Failed Transactions in the Last 24 Hours
-
+**Scenario 8 — Verify pagination returns correct records:**
 ```sql
--- QA monitoring query — find failed payment transactions in last 24 hours
--- Useful for investigating test failures or monitoring staging environment
+-- API GET /orders?page=2&limit=10 — verify these IDs match:
+SELECT id FROM orders ORDER BY created_at DESC LIMIT 10 OFFSET 10;
+-- Compare these IDs to the IDs in the API response
+```
 
-SELECT
-  t.id AS transaction_id,
-  t.order_id,
-  t.amount,
-  t.payment_method,
-  t.status,
-  t.error_code,
-  t.error_message,
-  t.created_at,
-  u.email AS user_email
+**Scenario 9 — Find all failed transactions in the last 24 hours:**
+```sql
+SELECT t.id, t.order_id, t.amount, t.error_code, t.error_message, t.created_at, u.email
 FROM transactions t
 INNER JOIN orders o ON t.order_id = o.id
 INNER JOIN users u ON o.user_id = u.id
 WHERE t.status = 'failed'
   AND t.created_at >= NOW() - INTERVAL 24 HOUR
 ORDER BY t.created_at DESC;
-
--- Useful for:
--- Regression testing: compare failed count before and after deploy
--- Test verification: after triggering an intentional failure, confirm it appears here
--- Root cause: error_code and error_message reveal payment gateway error details
 ```
 
----
-
-### Scenario 10: Check That a Discount Was Correctly Applied in DB
-
+**Scenario 10 — Verify discount was correctly applied:**
 ```sql
--- After applying a 20% discount coupon "SAVE20" to order 12345
--- Verify the discount was correctly stored and calculated
-
 SELECT
-  o.id AS order_id,
-  o.subtotal,
-  o.discount_amount,
-  o.discount_code,
-  o.total_amount,
-  -- Verify the math: discount should be 20% of subtotal
+  o.id, o.subtotal, o.discount_amount, o.discount_code, o.total_amount,
   ROUND(o.subtotal * 0.20, 2) AS expected_discount,
-  -- Verify total = subtotal - discount + tax
-  ROUND(o.subtotal - o.discount_amount + o.tax_amount, 2) AS expected_total,
-  -- Flag if calculation is wrong
   CASE
     WHEN ABS(o.discount_amount - ROUND(o.subtotal * 0.20, 2)) > 0.01
-    THEN 'DISCOUNT_CALCULATION_ERROR'
+    THEN 'CALCULATION_ERROR'
     ELSE 'CORRECT'
-  END AS discount_check,
-  CASE
-    WHEN ABS(o.total_amount - ROUND(o.subtotal - o.discount_amount + o.tax_amount, 2)) > 0.01
-    THEN 'TOTAL_CALCULATION_ERROR'
-    ELSE 'CORRECT'
-  END AS total_check
-FROM orders o
-WHERE o.id = 12345;
-
--- Also verify the coupon usage was recorded
-SELECT * FROM coupon_usages
-WHERE coupon_code = 'SAVE20' AND order_id = 12345;
--- Expected: 1 row — confirms coupon was applied and logged
+  END AS check_result
+FROM orders o WHERE o.id = 12345;
+-- Also verify coupon was logged:
+SELECT * FROM coupon_usages WHERE coupon_code = 'SAVE20' AND order_id = 12345;
 ```
 
 ---
 
-## 12. Database Testing Types
-
-### Data Integrity Testing
-
-Verifies that data stored in the database is accurate, consistent, and complete.
-
-```sql
--- Check: No NULL in required columns (NOT NULL constraint)
-SELECT COUNT(*) FROM users WHERE name IS NULL OR email IS NULL;
--- Expected: 0
-
--- Check: Email format is valid (basic)
-SELECT id, email FROM users
-WHERE email NOT REGEXP '^[A-Za-z0-9._%+-]+@[A-Za-z0-9.-]+\.[A-Za-z]{2,}$';
--- Expected: 0 rows
-
--- Check: Positive amounts only
-SELECT COUNT(*) FROM orders WHERE total_amount <= 0;
--- Expected: 0
-
--- Check: Valid status values
-SELECT DISTINCT status FROM orders;
--- Should only contain expected values: pending, processing, shipped, completed, cancelled
-```
+## SECTION 11 — JDBC AND JAVA DATABASE TESTING
 
 ---
 
-### Referential Integrity Testing
+**Q31: What is JDBC? How do you connect Java RestAssured tests to a database?**
 
-Verifies that foreign key relationships are correctly maintained.
+**A:** JDBC (Java Database Connectivity) is the standard Java API for connecting to relational databases. It allows Java test code to execute SQL queries and verify database state after API calls.
 
-```sql
--- Orphaned orders (no parent user)
-SELECT COUNT(*) FROM orders o
-LEFT JOIN users u ON o.user_id = u.id
-WHERE u.id IS NULL;
--- Expected: 0
-
--- Orphaned order_items (no parent order)
-SELECT COUNT(*) FROM order_items oi
-LEFT JOIN orders o ON oi.order_id = o.id
-WHERE o.id IS NULL;
--- Expected: 0
-
--- Check cascade delete worked correctly
--- After deleting user 101, verify their orders are also deleted (or soft-deleted)
-SELECT COUNT(*) FROM orders WHERE user_id = 101;
--- Depends on cascade policy: 0 if cascade delete, or soft-deleted
-```
-
----
-
-### Schema / Structural Testing
-
-Verifies the database structure matches the schema definition.
-
-```sql
--- MySQL: List all columns and types for a table
-DESCRIBE users;
-SHOW COLUMNS FROM orders;
-
--- PostgreSQL: Column information
-SELECT column_name, data_type, character_maximum_length, is_nullable, column_default
-FROM information_schema.columns
-WHERE table_name = 'users'
-ORDER BY ordinal_position;
-
--- Check for specific indexes
-SHOW INDEX FROM orders;                           -- MySQL
-SELECT indexname, indexdef FROM pg_indexes        -- PostgreSQL
-WHERE tablename = 'orders';
-
--- Check constraints
-SELECT constraint_name, constraint_type
-FROM information_schema.table_constraints
-WHERE table_name = 'users';
-```
-
----
-
-### Stored Procedure / Function Testing
-
-```sql
--- Test a stored procedure directly
-CALL sp_calculate_user_loyalty_score(101);
-
--- Verify the result
-SELECT loyalty_score, tier FROM user_loyalty WHERE user_id = 101;
-
--- Test a function
-SELECT fn_get_discounted_price(product_id => 5, quantity => 3);
-```
-
----
-
-### Trigger Testing
-
-Triggers run automatically on INSERT/UPDATE/DELETE. Test by performing the triggering action and verifying the triggered behavior.
-
-```sql
--- Test: INSERT into orders should trigger creation of an audit_log entry
--- Setup: ensure audit_log is empty for this test
-DELETE FROM audit_logs WHERE entity_type = 'order' AND entity_id = 9999;
-
--- Trigger: Insert a new order
-INSERT INTO orders (id, user_id, total_amount, status) VALUES (9999, 1, 50.00, 'pending');
-
--- Verify: trigger created audit log entry
-SELECT * FROM audit_logs
-WHERE entity_type = 'order' AND entity_id = 9999 AND action = 'INSERT';
--- Expected: 1 row
-```
-
----
-
-## 13. ACID Properties
-
-ACID is a set of properties that guarantee database transactions are processed reliably.
-
-### Atomicity
-
-A transaction is treated as a single unit — either **all operations succeed**, or **none are committed**.
-
-```sql
-BEGIN;
-  UPDATE accounts SET balance = balance - 100 WHERE id = 1;  -- debit Alice
-  UPDATE accounts SET balance = balance + 100 WHERE id = 2;  -- credit Bob
-COMMIT;
--- If either UPDATE fails, both are rolled back — money is not lost
-```
-
-**QA Test**: Insert a record that should trigger a cascade, then verify: if part of the operation fails (force an error), the entire transaction rolls back.
-
----
-
-### Consistency
-
-A transaction brings the database from one **valid state** to another valid state. All rules (constraints, triggers, cascades) are enforced.
-
-**Example**: A transaction that would violate a UNIQUE constraint on `email` is rejected entirely, keeping the database consistent.
-
----
-
-### Isolation
-
-Concurrent transactions execute as if they were sequential. One transaction's intermediate state is not visible to other transactions.
-
-**Isolation Levels** (from least to most strict):
-- `READ UNCOMMITTED` — Can read uncommitted changes (dirty reads possible).
-- `READ COMMITTED` — Only reads committed changes (default in PostgreSQL).
-- `REPEATABLE READ` — Rows read in a transaction don't change within that transaction (default in MySQL).
-- `SERIALIZABLE` — Highest isolation — transactions run fully sequentially.
-
----
-
-### Durability
-
-Once a transaction is committed, it **persists permanently** — even if the system crashes immediately after.
-
-**QA Test**: Commit a transaction, simulate a crash (restart the DB), verify the data is still there.
-
----
-
-## 14. Test Data Management — Setup and Teardown
-
-### Strategy 1: Dedicated Test Database
-
-Use a completely separate database for automated tests. Reset it before each test run.
-
-```sql
--- Reset and re-seed (run before test suite)
-TRUNCATE TABLE order_items;
-TRUNCATE TABLE orders;
-TRUNCATE TABLE users;
-
--- Re-seed with known test data
-INSERT INTO users VALUES (1, 'Alice', 'alice@test.com', 'admin', 'active', NOW());
-INSERT INTO users VALUES (2, 'Bob', 'bob@test.com', 'viewer', 'active', NOW());
-```
-
----
-
-### Strategy 2: Transaction Rollback (Per-Test Isolation)
-
-Wrap each test in a transaction. Roll back after the test — no cleanup needed.
-
-```sql
--- Test setup
-BEGIN;
-
--- Test actions (insert test data, call procedures, etc.)
-INSERT INTO users (name, email) VALUES ('Temp User', 'temp@test.com');
-UPDATE orders SET status = 'processing' WHERE id = 50;
-
--- Verify results
-SELECT * FROM users WHERE email = 'temp@test.com';
-
--- Test teardown — undo everything
-ROLLBACK;
--- Database is back to exact state before the test
-```
-
----
-
-### Strategy 3: Tagging Test Data
-
-Mark test data with a recognisable pattern and delete by tag after tests.
-
-```sql
--- Use a test-specific email domain or prefix
-INSERT INTO users (name, email) VALUES ('Test User', 'test_automated_20240115@qa.com');
-
--- Delete all test data after the suite
-DELETE FROM users WHERE email LIKE 'test_automated_%@qa.com';
-DELETE FROM orders WHERE user_id IN (
-  SELECT id FROM users WHERE email LIKE 'test_automated_%@qa.com'
-);
-```
-
----
-
-### Strategy 4: Database Snapshots / Migrations
-
-Use tools like Flyway, Liquibase, or DB snapshots to restore a known-good state before tests.
-
-```bash
-# Restore snapshot before test suite (database-specific)
-mysql -u root -p testdb < test_seed_snapshot.sql
-
-# Or use Flyway to run test migrations
-flyway -url=jdbc:mysql://localhost/testdb migrate
-```
-
----
-
-## 15. Connecting to a Database from Java Tests (JDBC)
-
-When using RestAssured or JUnit, you often need to verify database state after calling an API. Here is how to do it with JDBC.
-
-### Maven Dependency
-
+**Maven dependency:**
 ```xml
-<!-- pom.xml -->
 <dependency>
   <groupId>mysql</groupId>
   <artifactId>mysql-connector-java</artifactId>
@@ -1122,86 +1440,51 @@ When using RestAssured or JUnit, you often need to verify database state after c
 </dependency>
 ```
 
-### JDBC Helper Class
-
+**DatabaseHelper utility class:**
 ```java
-// src/test/java/utils/DatabaseHelper.java
-import java.sql.*;
-import java.util.*;
-
 public class DatabaseHelper {
-
-    private static final String URL = System.getenv().getOrDefault(
-        "DB_URL", "jdbc:mysql://localhost:3306/testdb"
-    );
+    private static final String URL = System.getenv()
+        .getOrDefault("DB_URL", "jdbc:mysql://localhost:3306/testdb");
     private static final String USER = System.getenv().getOrDefault("DB_USER", "root");
-    private static final String PASSWORD = System.getenv().getOrDefault("DB_PASSWORD", "password");
+    private static final String PASS = System.getenv().getOrDefault("DB_PASSWORD", "password");
 
     private Connection connection;
 
     public void connect() throws SQLException {
-        connection = DriverManager.getConnection(URL, USER, PASSWORD);
+        connection = DriverManager.getConnection(URL, USER, PASS);
     }
 
     public void disconnect() throws SQLException {
-        if (connection != null && !connection.isClosed()) {
-            connection.close();
-        }
+        if (connection != null && !connection.isClosed()) connection.close();
     }
 
-    /** Execute a SELECT query and return results as list of maps */
     public List<Map<String, Object>> query(String sql, Object... params) throws SQLException {
         List<Map<String, Object>> results = new ArrayList<>();
         try (PreparedStatement stmt = connection.prepareStatement(sql)) {
-            for (int i = 0; i < params.length; i++) {
-                stmt.setObject(i + 1, params[i]);
-            }
+            for (int i = 0; i < params.length; i++) stmt.setObject(i + 1, params[i]);
             ResultSet rs = stmt.executeQuery();
             ResultSetMetaData meta = rs.getMetaData();
-            int columnCount = meta.getColumnCount();
             while (rs.next()) {
                 Map<String, Object> row = new LinkedHashMap<>();
-                for (int i = 1; i <= columnCount; i++) {
+                for (int i = 1; i <= meta.getColumnCount(); i++)
                     row.put(meta.getColumnName(i), rs.getObject(i));
-                }
                 results.add(row);
             }
         }
         return results;
     }
 
-    /** Execute INSERT / UPDATE / DELETE, returns rows affected */
     public int update(String sql, Object... params) throws SQLException {
         try (PreparedStatement stmt = connection.prepareStatement(sql)) {
-            for (int i = 0; i < params.length; i++) {
-                stmt.setObject(i + 1, params[i]);
-            }
+            for (int i = 0; i < params.length; i++) stmt.setObject(i + 1, params[i]);
             return stmt.executeUpdate();
         }
-    }
-
-    /** Count rows matching a condition */
-    public int count(String sql, Object... params) throws SQLException {
-        List<Map<String, Object>> result = query(sql, params);
-        if (!result.isEmpty()) {
-            Object countVal = result.get(0).values().iterator().next();
-            return ((Number) countVal).intValue();
-        }
-        return 0;
     }
 }
 ```
 
-### Using DatabaseHelper in a Test
-
+**Using it in a JUnit test with RestAssured:**
 ```java
-// src/test/java/tests/UserApiTest.java
-import io.restassured.RestAssured;
-import org.junit.jupiter.api.*;
-import static io.restassured.RestAssured.*;
-import static org.hamcrest.Matchers.*;
-import static org.junit.jupiter.api.Assertions.*;
-
 public class UserApiTest {
 
     private static DatabaseHelper db = new DatabaseHelper();
@@ -1214,288 +1497,269 @@ public class UserApiTest {
 
     @AfterAll
     static void teardown() throws Exception {
-        // Clean up test data
         db.update("DELETE FROM users WHERE email = ?", "qa_test@example.com");
         db.disconnect();
     }
 
     @Test
-    void postUser_ShouldPersistToDatabase() throws Exception {
+    void postUser_shouldPersistToDatabase() throws Exception {
         // Step 1: Call the API
-        String body = """
-            {
-              "name": "QA Test User",
-              "email": "qa_test@example.com",
-              "role": "viewer"
-            }
-            """;
-
-        int createdUserId = given()
+        int userId = given()
             .contentType("application/json")
-            .body(body)
+            .body("{\"name\":\"QA Test\",\"email\":\"qa_test@example.com\",\"role\":\"viewer\"}")
         .when()
             .post("/api/users")
         .then()
             .statusCode(201)
-            .body("email", equalTo("qa_test@example.com"))
             .extract().path("id");
 
-        // Step 2: Verify in the database
-        var rows = db.query(
-            "SELECT id, name, email, role, status FROM users WHERE id = ?",
-            createdUserId
-        );
-
-        assertEquals(1, rows.size(), "Expected 1 user row in DB");
-        assertEquals("QA Test User", rows.get(0).get("name"));
-        assertEquals("qa_test@example.com", rows.get(0).get("email"));
+        // Step 2: Verify in DB
+        var rows = db.query("SELECT name, role, status FROM users WHERE id = ?", userId);
+        assertEquals(1, rows.size(), "Expected 1 row in DB");
         assertEquals("viewer", rows.get(0).get("role"));
         assertEquals("active", rows.get(0).get("status"));
-    }
-
-    @Test
-    void deleteUser_ShouldSoftDeleteInDatabase() throws Exception {
-        // Assume user 101 exists
-        given().when().delete("/api/users/101").then().statusCode(204);
-
-        // Verify soft delete — deleted_at should be set
-        var rows = db.query(
-            "SELECT deleted_at FROM users WHERE id = ?", 101
-        );
-        assertEquals(1, rows.size(), "User row should still exist");
-        assertNotNull(rows.get(0).get("deleted_at"), "deleted_at should be set after soft delete");
     }
 }
 ```
 
----
-
-## 16. Senior Interview Q&A — 10 Questions with Full Answers
+**Why PreparedStatement?** It prevents SQL injection (parameter values are escaped) and is more efficient for repeated queries.
 
 ---
 
-**Q1: What is the difference between INNER JOIN, LEFT JOIN, and RIGHT JOIN? Give a QA use case for each.**
+**Q32: What are the main types of database testing? Explain each.**
 
-**A**:
+**A:**
 
-- **INNER JOIN** returns only rows where there is a match in both tables. Use it when you want to verify that a relationship exists: e.g., "Show me all orders that have a corresponding user" — if the user_id is invalid, that order won't appear.
-
-- **LEFT JOIN** returns all rows from the left table and matched rows from the right (NULLs for non-matches). QA use case: Find users who have never placed an order — `LEFT JOIN orders ON user.id = order.user_id WHERE order.id IS NULL`.
-
-- **RIGHT JOIN** is the mirror of LEFT JOIN — all rows from the right table. QA use case: Find orphaned orders (orders with no corresponding user) — `RIGHT JOIN users ON order.user_id = user.id WHERE user.id IS NULL`.
-
-In practice, most QA engineers use LEFT JOIN for orphan checks because it is more readable and universally supported, reversing the table order compared to RIGHT JOIN.
-
----
-
-**Q2: How do NULLs behave in SQL, and what mistakes do developers and QA engineers often make with them?**
-
-**A**: NULL represents the absence of a value — it is not zero, not an empty string, and not false. This causes three common mistakes:
-
-1. **Comparing with = NULL**: `WHERE phone = NULL` always returns 0 rows because NULL is not equal to anything, including itself. Use `WHERE phone IS NULL`.
-
-2. **NOT IN with NULLs**: If a subquery in `NOT IN` contains even one NULL, the entire `NOT IN` returns no rows. Example:
-   ```sql
-   -- If orders has a row with user_id = NULL, this returns 0 rows for ALL users:
-   SELECT * FROM users WHERE id NOT IN (SELECT user_id FROM orders);
-   -- Fix: add WHERE user_id IS NOT NULL in the subquery
-   ```
-
-3. **Aggregates ignoring NULL**: `AVG()`, `SUM()`, `COUNT(column)` all ignore NULL values. `COUNT(*)` counts all rows including NULLs. `COUNT(email)` counts only non-NULL email values.
-
----
-
-**Q3: What are ACID properties and why do they matter for database testing?**
-
-**A**: ACID stands for Atomicity, Consistency, Isolation, and Durability — the four properties that guarantee reliable database transactions.
-
-- **Atomicity**: A transaction is all-or-nothing. QA tests: if a payment debit fails midway, the corresponding credit should not have been applied. Rollback should restore the original state.
-- **Consistency**: Constraints are never violated. QA tests: verify that a NOT NULL column cannot be set to NULL, and that UNIQUE constraints prevent duplicate entries.
-- **Isolation**: Concurrent transactions should not interfere. QA tests: simulate two users booking the last seat simultaneously and verify only one succeeds.
-- **Durability**: Committed transactions survive crashes. QA tests: commit a transaction, restart the database, verify the data persists.
-
-For QA, ACID is important because tests that run in parallel can interfere with each other if transactions are not properly isolated. Using transactions with ROLLBACK in test teardown ensures clean isolation.
-
----
-
-**Q4: What is the difference between TRUNCATE and DELETE?**
-
-**A**:
-
-- **DELETE** removes rows one at a time, logs each deletion for rollback, fires DELETE triggers, and can include a WHERE clause to delete specific rows. It does NOT reset the AUTO_INCREMENT counter.
-- **TRUNCATE** removes all rows instantly (deallocation), does not log individual row deletions, cannot be rolled back in most databases (it is DDL, not DML), does NOT fire row-level triggers, and RESETS the AUTO_INCREMENT counter to 1.
-
-For QA:
-- Use `TRUNCATE` to fully reset a test table between test suites (fast, resets IDs).
-- Use `DELETE WHERE email LIKE 'test_%'` to clean up only the specific test data created by a particular test.
-- Never use `DELETE` without `WHERE` in a production database — it deletes everything but is slower than TRUNCATE.
-
----
-
-**Q5: How do you verify via SQL that an API with pagination is returning the correct records?**
-
-**A**: The approach has two parts — count verification and data verification.
-
-1. **Count verification**: Query the database with the same filter as the API and compare `COUNT(*)` to the API's `meta.totalCount` field.
-
-2. **Page verification**: Replicate the API's query with the same ORDER BY and OFFSET/LIMIT:
-   ```sql
-   SELECT id FROM orders ORDER BY created_at DESC LIMIT 10 OFFSET 10;
-   ```
-   The IDs returned must match the IDs in the API response for page 2.
-
-3. **Edge case checks**:
-   - Query for a page beyond the last page — API should return an empty array, not an error.
-   - Verify total count matches when adding a new record (total should increment by 1).
-   - Verify consistent ordering — if data changes between page 1 and page 2 calls, results can shift; check the API uses a stable sort.
-
----
-
-**Q6: What is a SQL index and how can it affect your performance test results?**
-
-**A**: An index is a data structure (typically a B-tree) that allows the database to find rows matching a condition without scanning every row in the table. Think of it as a book's index — instead of reading every page to find "JMeter", you go directly to the indexed location.
-
-**Impact on QA**:
-- Without an index on `orders.user_id`, a query like `SELECT * FROM orders WHERE user_id = 101` performs a full table scan — O(n) time.
-- With an index, the same query is O(log n) — much faster as the table grows.
-
-**Performance test implications**:
-- A performance test running against a small database (1000 rows) may show fast response times even without indexes.
-- The same test against a production-scale database (10 million rows) will show massively degraded performance for unindexed queries.
-- QA should run volume tests with production-scale data to catch missing indexes before they reach production.
-
-To check indexes:
+**Data Integrity Testing** — verifies that stored data is accurate, complete, and meets constraints:
 ```sql
-SHOW INDEX FROM orders;                    -- MySQL
-\d orders                                  -- PostgreSQL (show table including indexes)
+-- Required fields are never NULL
+SELECT COUNT(*) FROM users WHERE name IS NULL OR email IS NULL;  -- expect 0
+
+-- No negative amounts
+SELECT COUNT(*) FROM orders WHERE total_amount < 0;  -- expect 0
+
+-- Only valid status values exist
+SELECT DISTINCT status FROM orders;
+-- Should only contain: pending, processing, shipped, completed, cancelled
+
+-- Email format validation
+SELECT id, email FROM users
+WHERE email NOT REGEXP '^[A-Za-z0-9._%+-]+@[A-Za-z0-9.-]+\\.[A-Za-z]{2,}$';
+```
+
+**Referential Integrity Testing** — verifies foreign key relationships:
+```sql
+-- Every child row has a valid parent
+SELECT COUNT(*) FROM orders o LEFT JOIN users u ON o.user_id = u.id WHERE u.id IS NULL;
+-- Expected: 0
+```
+
+**Schema / Structural Testing** — verifies the DB structure matches the specification:
+```sql
+-- List columns and types
+DESCRIBE users;                     -- MySQL
+SELECT column_name, data_type FROM information_schema.columns WHERE table_name = 'users';
+
+-- Check indexes
+SHOW INDEX FROM orders;             -- MySQL
+```
+
+**Stored Procedure Testing** — verifies business logic in procedures:
+```sql
+CALL sp_calculate_loyalty_score(101);
+SELECT loyalty_tier FROM users WHERE id = 101;  -- verify result
+```
+
+**Trigger Testing** — verifies triggers fire correctly:
+```sql
+-- Insert an order, verify audit_log trigger fired
+INSERT INTO orders (user_id, total_amount, status) VALUES (1, 50.00, 'pending');
+SELECT * FROM audit_logs WHERE entity_type = 'order' AND action = 'INSERT'
+  AND created_at >= NOW() - INTERVAL 1 MINUTE;
+-- Expected: 1 row
+```
+
+**Migration Testing** — verifies data survived a schema migration correctly:
+```sql
+-- Count records before and after migration
+SELECT COUNT(*) FROM users;         -- run before migration, note count
+-- Run migration
+SELECT COUNT(*) FROM users;         -- same count after = no data loss
+-- Check migrated fields
+SELECT COUNT(*) FROM users WHERE new_column IS NULL;  -- 0 if backfill worked
 ```
 
 ---
 
-**Q7: How do you use SQL to verify data was correctly soft-deleted?**
+## SECTION 12 — INTERVIEW QUESTIONS
 
-**A**: A soft delete does not physically remove the row — it marks it as deleted using a flag column (typically `deleted_at TIMESTAMP` or `is_deleted BOOLEAN`).
+---
 
-**SQL verification after DELETE /api/users/101**:
+**Q33: What is the difference between INNER JOIN, LEFT JOIN, and RIGHT JOIN from a QA perspective?**
+
+**A:** INNER JOIN returns only rows with matches in both tables — use it to verify a relationship exists. LEFT JOIN returns all rows from the left table regardless of matches — use it to find records that have NO related record (e.g., users with no orders). RIGHT JOIN is the mirror — use it to find orphaned records in the right table.
+
+In practice, most QA engineers prefer LEFT JOIN for both scenarios by swapping table order — it is more readable and universally supported. The pattern `LEFT JOIN ... WHERE right.id IS NULL` is the go-to pattern for any "find orphaned/unmatched records" check.
+
+---
+
+**Q34: How do NULLs behave in SQL, and what are the most common mistakes with them?**
+
+**A:** NULL represents the absence of a value. Three critical behaviours:
+
+1. `WHERE phone = NULL` always returns 0 rows — use `WHERE phone IS NULL`
+2. `NOT IN` with a subquery that contains NULLs returns 0 rows for everything — always add `WHERE column IS NOT NULL` to the subquery
+3. Aggregate functions ignore NULLs: `AVG(score)` over values `[10, NULL, 30]` returns 20, not 13.3
+
+These are the NULL traps that cause silent test failures — your query returns 0 rows and you assume the data is clean when the query was just broken.
+
+---
+
+**Q35: What is the difference between TRUNCATE and DELETE, and when do you use each in testing?**
+
+**A:** DELETE removes specific rows with a WHERE clause, fires triggers, can be rolled back, and does not reset the AUTO_INCREMENT counter. TRUNCATE removes all rows instantly, does not fire row-level triggers, cannot be rolled back (it is DDL), and resets the ID counter to 1.
+
+In testing: use `TRUNCATE` to completely reset a test table between test suites (fast, clean slate). Use `DELETE WHERE email LIKE 'test_%'` to clean up only the specific data created by a test run without touching other rows.
+
+---
+
+**Q36: How do you use SQL to verify pagination is working correctly?**
+
+**A:** Two parts: count verification and record verification.
+
+Count: `SELECT COUNT(*) FROM orders` must equal the API's `meta.totalCount`.
+
+Records: Replicate the API's ORDER BY and OFFSET/LIMIT:
+```sql
+SELECT id FROM orders ORDER BY created_at DESC LIMIT 10 OFFSET 10;
+```
+The returned IDs must exactly match the IDs in the API's page 2 response.
+
+Edge cases: verify last page returns fewer records (not an error), and verify adding a record increments the total count by exactly 1.
+
+---
+
+**Q37: What is a transaction and why do QA engineers care about it?**
+
+**A:** A transaction is a sequence of SQL operations that either all succeed (COMMIT) or all fail (ROLLBACK). For QA, transactions enable perfect test isolation: wrap your test data setup in `BEGIN`, run your test, then `ROLLBACK` — the database returns to exactly its prior state with no cleanup code needed. This also means tests can run in parallel against the same database without corrupting each other's data, as long as each test uses its own transaction scope.
+
+---
+
+**Q38: What is ACID and how does it affect your testing approach?**
+
+**A:** ACID = Atomicity (all-or-nothing), Consistency (constraints always enforced), Isolation (concurrent transactions do not interfere), Durability (committed data persists through crashes).
+
+For testing:
+- Atomicity: test that partial failures roll back completely
+- Consistency: test that constraint violations are rejected
+- Isolation: test concurrent operations (booking last seat, double-submit prevention)
+- Durability: verify committed data survives a restart (integration/infrastructure test)
+
+Using `BEGIN/ROLLBACK` in automated tests directly leverages Atomicity for clean teardown.
+
+---
+
+**Q39: Explain the NOT IN + NULL gotcha. How do you avoid it?**
+
+**A:** If a subquery used with `NOT IN` returns any NULL values, the entire result set is empty — even rows that should logically match. This is because `NOT IN` expands to a chain of `!=` comparisons, and `column != NULL` is always NULL (unknown), making the whole chain false.
 
 ```sql
--- 1. Row still exists (not physically deleted)
-SELECT COUNT(*) FROM users WHERE id = 101;
--- Expected: 1 (row is still there)
+-- BROKEN if orders.user_id has any NULLs:
+SELECT * FROM users WHERE id NOT IN (SELECT user_id FROM orders);
 
--- 2. deleted_at is set to a recent timestamp
-SELECT deleted_at FROM users WHERE id = 101;
--- Expected: a timestamp within the last minute
+-- FIXED:
+SELECT * FROM users WHERE id NOT IN (
+  SELECT user_id FROM orders WHERE user_id IS NOT NULL
+);
 
--- 3. Active queries exclude this user
-SELECT COUNT(*) FROM users WHERE id = 101 AND deleted_at IS NULL;
--- Expected: 0 (user is no longer "active")
-
--- 4. Verify the user doesn't appear in the "active users" API
--- Call GET /api/users and verify user 101 is NOT in the response
--- Cross-check: if API uses WHERE deleted_at IS NULL, DB and API should agree
+-- BEST PRACTICE — use NOT EXISTS instead:
+SELECT * FROM users u WHERE NOT EXISTS (
+  SELECT 1 FROM orders o WHERE o.user_id = u.id
+);
 ```
 
 ---
 
-**Q8: What is the difference between optimistic and pessimistic locking in databases?**
+**Q40: How do you test stored procedures and database triggers?**
 
-**A**:
+**A:**
 
-**Pessimistic Locking**: Assumes conflicts will occur. Locks the row when reading it, preventing other transactions from modifying it until the lock is released.
+**Stored procedures:** Call them directly with `CALL sp_name(params)`, then verify the results with SELECT queries:
+```sql
+CALL sp_calculate_loyalty_score(101);
+SELECT loyalty_tier FROM users WHERE id = 101;
+-- Verify the procedure produced the expected result
+```
+Use transaction wrapping to test negative paths — call with invalid inputs, verify the procedure handles them correctly, ROLLBACK to clean up.
+
+**Triggers:** They fire automatically on INSERT/UPDATE/DELETE. Test them by performing the triggering action and verifying the triggered effect:
+```sql
+-- Test an audit log trigger on INSERT
+INSERT INTO orders (user_id, total_amount, status) VALUES (1, 50.00, 'pending');
+
+-- Verify the trigger fired and created an audit entry
+SELECT * FROM audit_logs WHERE entity_type = 'order' AND action = 'INSERT'
+  AND created_at >= NOW() - INTERVAL 1 MINUTE;
+-- Expected: 1 row
+```
+
+Trigger testing is important because bugs in triggers are often invisible at the API level — the API returns 201, but the audit log, inventory update, or notification that the trigger should have created is missing.
+
+---
+
+**Q41: What SQL would you write to verify data integrity after a bulk data migration?**
+
+**A:** A migration integrity check suite covers four areas:
 
 ```sql
--- MySQL: Locks the row for update (no one else can modify it)
+-- 1. Row count matches source
+SELECT COUNT(*) FROM users;  -- must equal source system count
+
+-- 2. No required fields lost (became NULL)
+SELECT COUNT(*) FROM users WHERE name IS NULL OR email IS NULL;  -- expect 0
+
+-- 3. No duplicates created
+SELECT email, COUNT(*) FROM users GROUP BY email HAVING COUNT(*) > 1;  -- expect 0 rows
+
+-- 4. No orphaned records
+SELECT COUNT(*) FROM orders o LEFT JOIN users u ON o.user_id = u.id WHERE u.id IS NULL;  -- expect 0
+
+-- 5. Data transformed correctly (example: phone format standardised)
+SELECT COUNT(*) FROM users WHERE phone NOT REGEXP '^\\+[0-9]{10,15}$';  -- expect 0
+
+-- 6. Migrated fields have expected default values
+SELECT COUNT(*) FROM users WHERE status IS NULL;  -- expect 0
+
+-- 7. Timestamps are realistic (not NULL, not future dates, not epoch)
+SELECT COUNT(*) FROM users WHERE created_at IS NULL OR created_at > NOW();  -- expect 0
+```
+
+Run these before and after migration. Any number that changes unexpectedly (other than 0 becoming 0) indicates a migration error.
+
+---
+
+**Q42: What is the difference between optimistic and pessimistic locking? How do you test each?**
+
+**A:**
+
+**Pessimistic locking** — locks the row when reading, blocking concurrent modifications:
+```sql
 SELECT * FROM orders WHERE id = 50 FOR UPDATE;
--- Make changes, then:
-COMMIT;
+-- No other transaction can modify this row until this transaction commits/rollbacks
 ```
+Test: Open transaction A with FOR UPDATE on a row. In transaction B, try to modify the same row. Verify B blocks (waits) until A commits. If B gets a dirty read, locking is broken.
 
-Use case: High-contention scenarios like inventory management (booking the last seat). Prevents conflicts but reduces concurrency and can cause deadlocks.
-
-**Optimistic Locking**: Assumes conflicts are rare. No lock is taken during read. Instead, a version counter or timestamp is checked at update time.
-
+**Optimistic locking** — no lock during read, uses a version column to detect concurrent changes:
 ```sql
 -- Read with version
-SELECT id, status, version FROM orders WHERE id = 50;
--- version = 3
+SELECT id, status, version FROM orders WHERE id = 50;  -- version = 3
 
--- Update — only succeeds if version hasn't changed
-UPDATE orders SET status = 'shipped', version = 4
-WHERE id = 50 AND version = 3;
--- If 0 rows affected → another process updated first → retry or show conflict error
+-- Update only if version hasn't changed
+UPDATE orders SET status = 'shipped', version = 4 WHERE id = 50 AND version = 3;
+-- 0 rows affected = another process changed it first — application should handle this
 ```
-
-**QA test scenarios**:
-- Optimistic locking: Simulate two concurrent users editing the same record. Verify only one succeeds and the other gets a conflict error.
-- Pessimistic locking: Verify that while transaction A holds a lock, transaction B waits (or times out) and does not get a dirty read.
+Test: Simulate two concurrent users editing the same record (both read version=3, both try to update). Verify only one succeeds (1 row affected) and the other gets 0 rows affected and the application returns a conflict error (HTTP 409).
 
 ---
 
-**Q9: What SQL would you write to verify that all required audit log entries exist after a batch operation?**
-
-**A**: After an operation that modifies multiple records (e.g., bulk price update for a category), verify the audit log has one entry per modified record:
-
-```sql
--- Count products updated by the bulk operation
-SELECT COUNT(*) AS products_updated
-FROM products
-WHERE category = 'Electronics'
-  AND updated_at >= NOW() - INTERVAL 5 MINUTE;
-
--- Count audit log entries for the same operation
-SELECT COUNT(*) AS audit_entries
-FROM audit_logs
-WHERE entity_type = 'product'
-  AND action = 'UPDATE'
-  AND change_reason = 'bulk_price_update'
-  AND created_at >= NOW() - INTERVAL 5 MINUTE;
-
--- Both counts must match
--- If products_updated = 150 but audit_entries = 0: trigger not firing
--- If products_updated = 150 but audit_entries = 149: one record missed the trigger
-
--- Cross-reference: find which products are missing audit entries
-SELECT p.id
-FROM products p
-WHERE p.category = 'Electronics'
-  AND p.updated_at >= NOW() - INTERVAL 5 MINUTE
-  AND p.id NOT IN (
-    SELECT entity_id FROM audit_logs
-    WHERE entity_type = 'product'
-      AND action = 'UPDATE'
-      AND created_at >= NOW() - INTERVAL 5 MINUTE
-  );
-```
-
----
-
-**Q10: What is a transaction and why is it important in test data setup and teardown?**
-
-**A**: A transaction is a sequence of SQL operations executed as a single logical unit. Either all operations commit (permanently saved) or all roll back (completely undone).
-
-**Why it matters for test data**:
-
-Without transactions, test data cleanup is manual and error-prone. If a test fails midway, partial data remains in the database, causing subsequent tests to behave unexpectedly.
-
-With transactions:
-```sql
-BEGIN;
-
--- Setup: insert test data
-INSERT INTO users (name, email) VALUES ('Test User', 'test@qa.com');
-INSERT INTO orders (user_id, total) VALUES (LAST_INSERT_ID(), 100.00);
-
--- Run test assertions here...
-
--- Teardown: undo all test data, regardless of pass/fail
-ROLLBACK;
-```
-
-After `ROLLBACK`, the database is in exactly the same state as before the test — no cleanup code needed, no partial data left behind.
-
-In Java/JUnit with RestAssured, this is implemented using the `@Transactional` annotation (with Spring) or by wrapping each test's JDBC calls in a `BEGIN/ROLLBACK` block, ensuring true test isolation even when multiple tests run in parallel against the same database.
-
----
-
-*End of SQL & Database Testing Complete Guide*
+*End of SQL & Database Testing Complete Q&A Guide — 42 Questions*
