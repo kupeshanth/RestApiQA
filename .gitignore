@@ -1,0 +1,15 @@
+# Maven build output
+target/
+
+# Maven downloaded locally into project (too large to push)
+apache-maven-3.9.6/
+
+# IDE files
+.idea/
+*.iml
+.vscode/
+*.class
+
+# OS files
+.DS_Store
+Thumbs.db

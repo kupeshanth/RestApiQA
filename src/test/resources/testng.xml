@@ -1,0 +1,42 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE suite SYSTEM "http://testng.org/testng-1.0.dtd">
+
+<suite name="REST API Test Suite" verbose="1">
+
+    <test name="GET Tests">
+        <classes>
+            <class name="tests.GetTests"/>
+        </classes>
+    </test>
+
+    <test name="POST Tests">
+        <classes>
+            <class name="tests.PostTests"/>
+        </classes>
+    </test>
+
+    <test name="PUT and PATCH Tests">
+        <classes>
+            <class name="tests.PutTests"/>
+        </classes>
+    </test>
+
+    <test name="DELETE Tests">
+        <classes>
+            <class name="tests.DeleteTests"/>
+        </classes>
+    </test>
+
+    <test name="Chained E2E Tests">
+        <classes>
+            <class name="tests.ChainedTests"/>
+        </classes>
+    </test>
+
+    <test name="Data Driven Tests">
+        <classes>
+            <class name="tests.DataDrivenTests"/>
+        </classes>
+    </test>
+
+</suite>
