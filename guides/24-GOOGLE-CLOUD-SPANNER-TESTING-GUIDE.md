@@ -1,67 +1,64 @@
-# Google Cloud Spanner — Testing Guide | Cloud Database QA
-
-> Senior QA Interview Preparation — Cloud Database Testing with GCP
-
----
-
-## SECTION 1 — What is Google Cloud Spanner
-
-### Overview
-
-Google Cloud Spanner is a **fully managed, globally distributed, horizontally scalable relational database** built and operated by Google. It is used by large-scale enterprise applications that need to serve users across multiple geographic regions while maintaining strict data consistency and supporting full SQL.
-
-**Key characteristics:**
-- **Fully managed:** Google handles infrastructure, replication, failover, and patching
-- **Globally distributed:** Data is replicated across multiple regions (e.g. US, Europe, Asia) simultaneously
-- **Horizontally scalable:** Add processing nodes to increase throughput without schema changes or downtime
-- **Strongly consistent:** Unlike most distributed databases, Spanner provides globally consistent reads and serialisable transactions — all nodes see the same data at the same time
-- **ACID guarantees:** Full ACID transactions across multiple rows, tables, and even across geographic regions
-- **SQL support:** ANSI 2011 SQL with Google extensions
-
-### Real-World Usage
-
-Spanner is used where a traditional single-region database cannot scale but a NoSQL database's eventual consistency is not acceptable:
-- Financial transaction systems (strict consistency required)
-- Global inventory management (accurate stock counts across regions)
-- Gaming leaderboards (consistent global rankings)
-- Multi-region SaaS platforms
-
-### Relevance to Kupeshanth
-
-Qoria Lanka operates on Google Cloud Platform (GCP). Testing against Spanner is a realistic expectation for a Senior QA Engineer at Qoria — you may need to verify data written by APIs lands correctly in Spanner, validate migration scripts, or run integration tests using the Spanner emulator in CI.
+# Google Cloud Spanner — Full Interview Q&A Guide
+## Cloud Database Testing with GCP | Senior QA Interview Preparation
 
 ---
 
-## SECTION 2 — How Spanner Differs from Traditional SQL Databases
+## SECTION 1 — SPANNER FUNDAMENTALS
 
-Understanding these differences is critical for writing correct tests — many patterns from MySQL/PostgreSQL do not apply.
+---
 
-### No Auto-Increment / No Sequences
-MySQL and PostgreSQL support `AUTO_INCREMENT` or `SERIAL` for generating unique integer IDs automatically. Spanner does NOT support this.
+**Q1: What is Google Cloud Spanner and when would you use it?**
 
-**Why:** Sequential integer keys create "hot spots" — all inserts go to the same shard/region, creating a write bottleneck.
+**A:**
 
-**Spanner approach:** Use UUIDs (universally unique identifiers) or application-generated IDs that distribute writes evenly.
+Google Cloud Spanner is a fully managed, globally distributed, horizontally scalable relational database built and operated by Google. It is the only database that simultaneously provides:
+- **Global strong consistency**: once a write commits, every read anywhere in the world sees it
+- **ACID transactions**: full serialisable transactions across multiple rows, tables, and geographic regions
+- **Horizontal scalability**: add nodes to increase throughput without schema changes or downtime
+- **ANSI SQL**: standard SQL with Google extensions
+
+You choose Spanner when your application has outgrown the vertical scaling limits of a traditional relational database but cannot accept the eventual consistency trade-offs of NoSQL solutions:
+
+| Use Case | Why Spanner Fits |
+|----------|-----------------|
+| Global payments platform | All regions must see the same account balance; strong consistency is non-negotiable |
+| Multi-region SaaS product | Users in Asia and Europe must see the same data; 99.999% availability required |
+| Global inventory management | Stock counts must be accurate everywhere; overselling caused by stale reads is unacceptable |
+| Gaming leaderboards | Rankings must be globally consistent; a player in Tokyo must see the same rank as one in London |
+
+Real-world scale examples: Google's own Ads platform (F1 database), Snap, PayPal, Shopify, and many financial institutions use Spanner for workloads that are too large or too globally distributed for a single-region PostgreSQL or MySQL instance.
+
+---
+
+**Q2: How is Spanner different from MySQL and PostgreSQL? Why do these differences matter for testing?**
+
+**A:**
+
+Spanner has five differences that directly affect how you write test code:
+
+**1. No auto-increment / no sequences**
+
+MySQL: `id INT AUTO_INCREMENT` — the database generates 1, 2, 3, 4...
+PostgreSQL: `id SERIAL` or `GENERATED ALWAYS AS IDENTITY`
+Spanner: neither exists. Sequential integer keys create "hot spots" — all inserts hit the same partition/shard, creating a write bottleneck.
 
 ```java
-// In MySQL: the DB generates the ID
-// INSERT INTO orders (amount) VALUES (99.99);  -- DB assigns id=1001
+// MySQL — database generates the ID automatically
+// INSERT INTO orders (amount) VALUES (99.99); -- db returns id=1001
 
-// In Spanner: your application generates the ID
-import java.util.UUID;
-String orderId = UUID.randomUUID().toString();  // e.g. "f47ac10b-58cc-4372-a567-0e02b2c3d479"
-// Then insert: INSERT INTO orders (order_id, amount) VALUES (@orderId, @amount)
+// Spanner — application must generate the ID
+String orderId = UUID.randomUUID().toString(); // random UUID, distributes evenly
+// INSERT INTO orders (order_id, amount) VALUES (@orderId, @amount)
 ```
 
-**QA implication:** Test data insertion scripts must generate IDs, not rely on the database generating them.
+QA impact: your test data insertion scripts must generate IDs. You cannot rely on `LAST_INSERT_ID()` or `currval('orders_id_seq')`.
 
-### No ENUM Type
-MySQL supports `ENUM('ACTIVE', 'INACTIVE', 'PENDING')`. Spanner does NOT.
+**2. No ENUM type**
 
-**Spanner approach:** Use `STRING(50)` column + application-level or CHECK constraint validation.
+MySQL: `status ENUM('ACTIVE', 'PENDING', 'CANCELLED')`
+Spanner: use `STRING(20)` with a `CHECK` constraint.
 
 ```sql
--- In Spanner, you add a CHECK constraint manually:
 CREATE TABLE orders (
     order_id STRING(36) NOT NULL,
     status   STRING(20) NOT NULL,
@@ -69,275 +66,264 @@ CREATE TABLE orders (
 ) PRIMARY KEY (order_id);
 ```
 
-**QA implication:** Test that the CHECK constraint correctly rejects invalid status values.
+QA impact: test that invalid status values are rejected by the CHECK constraint.
 
-### Interleaved Tables (Parent-Child Locality)
+**3. Interleaved tables (no foreign key enforcement by default)**
 
-Interleaved tables are a Spanner concept for storing child rows physically adjacent to their parent row for read performance. They are defined at schema level:
+Spanner uses interleaved tables to co-locate child rows with their parent for read performance. They have cascade delete behaviour but not the same enforcement as a MySQL foreign key.
+
+**4. Two write APIs** — Mutations (batch) and DML (SQL statements) — different performance profiles.
+
+**5. Strong vs stale reads** — choosing the wrong read mode in tests causes false failures.
+
+---
+
+**Q3: What is strong consistency vs eventual consistency, and why does it matter for test assertions?**
+
+**A:**
+
+**Eventual consistency** (used by Cassandra, DynamoDB in certain modes, Redis): a write is accepted immediately on one node and propagates to other nodes over time (milliseconds to seconds). A read immediately after a write may return the old value if it hits a node that hasn't received the update yet. You have to poll/retry in tests to confirm writes landed.
+
+**Strong consistency** (used by Spanner): Spanner uses the TrueTime API and a Paxos consensus protocol. A write transaction commits only when a quorum of replicas (across geographic regions) have acknowledged it. Once committed, every subsequent read — from any node, anywhere — is guaranteed to see the write. There is no propagation delay.
+
+Why this is a significant QA advantage:
+
+```java
+// In Spanner — this ALWAYS works. No sleep, no retry needed.
+spannerHelper.insertTestOrder("CUST-42", 99.99);  // commit waits for quorum
+Struct row = dbClient.singleUse().readRow("orders", Key.of(orderId), columns);
+assertNotNull(row);  // guaranteed to see the row just inserted
+
+// In Cassandra (eventual consistency) — this is UNRELIABLE without a delay
+cassandraSession.execute("INSERT INTO orders ...");
+Row row = cassandraSession.execute("SELECT * FROM orders WHERE id=?", id).one();
+// row might be NULL if read hit a replica that hasn't received the write yet!
+// You'd need: Thread.sleep(500) or a retry loop — fragile
+```
+
+The rule for Spanner tests: always use strong reads (`dbClient.singleUse()`). Never use stale reads (`TimestampBound.ofMaxStaleness(...)`) in test assertions — stale reads intentionally ignore recent writes and will cause false test failures.
+
+---
+
+**Q4: What is an interleaved table? What specifically do you test about it?**
+
+**A:**
+
+An interleaved table is a Spanner-specific way to physically store child rows adjacent to their parent row on disk. This co-location makes reads of a parent with its children extremely efficient because they are on the same storage shard. The relationship is declared in the DDL schema:
 
 ```sql
 -- Parent table
 CREATE TABLE orders (
-    order_id   STRING(36) NOT NULL,
+    order_id    STRING(36) NOT NULL,
     customer_id STRING(36) NOT NULL,
-    total_amount FLOAT64,
+    amount      FLOAT64    NOT NULL,
+    status      STRING(20) NOT NULL,
 ) PRIMARY KEY (order_id);
 
--- Child table interleaved IN PARENT orders
+-- Child table — interleaved IN PARENT orders
 CREATE TABLE order_items (
-    order_id     STRING(36) NOT NULL,    -- same PK prefix as parent
+    order_id     STRING(36) NOT NULL,  -- must include parent's PK prefix
     item_id      STRING(36) NOT NULL,
     product_name STRING(200),
     quantity     INT64,
-    price        FLOAT64,
+    unit_price   FLOAT64,
 ) PRIMARY KEY (order_id, item_id),
   INTERLEAVE IN PARENT orders ON DELETE CASCADE;
+-- ON DELETE CASCADE: deleting parent row also deletes all child rows
 ```
 
-`ON DELETE CASCADE` means deleting the parent `order` row also deletes all its `order_items` rows.
+Two behaviors require explicit tests:
 
-**QA implication:** Test that deleting a parent record cascades correctly to child records. Also test that inserting a child record for a non-existent parent is rejected.
-
-### Commit Timestamps
-
-Spanner can auto-populate a column with the exact server timestamp of the commit:
-
-```sql
-CREATE TABLE orders (
-    order_id   STRING(36) NOT NULL,
-    created_at TIMESTAMP NOT NULL OPTIONS (allow_commit_timestamp=true),
-) PRIMARY KEY (order_id);
-```
-
-When inserting, use the sentinel value `PENDING_COMMIT_TIMESTAMP()` — Spanner replaces it with the real commit timestamp:
+**Test 1: Cascade delete**
 ```java
-Mutation.newInsertBuilder("orders")
-    .set("order_id").to("f47ac10b-...")
-    .set("created_at").to(Value.COMMIT_TIMESTAMP)  // Spanner fills this in
-    .build()
+@Test
+public void deleteParentOrder_cascadesDeleteToAllOrderItems() {
+    // Setup: create parent order + 3 items
+    String orderId = spannerHelper.insertTestOrder(TEST_CUSTOMER_ID, 300.00);
+    spannerHelper.insertOrderItem(orderId, "PROD-1", 1, 100.00);
+    spannerHelper.insertOrderItem(orderId, "PROD-2", 2, 100.00);
+
+    // Verify items exist before delete
+    assertEquals(spannerHelper.queryItemsByOrder(orderId).size(), 3);
+
+    // Act: delete the parent
+    spannerHelper.deleteOrder(orderId);
+
+    // Assert: all items are also gone (cascade)
+    assertEquals(spannerHelper.queryItemsByOrder(orderId).size(), 0,
+        "ON DELETE CASCADE should have removed all order_items when order was deleted");
+}
 ```
 
-**QA implication:** You cannot predict the exact value of a commit timestamp. Test that it is NOT NULL, that it is a valid recent timestamp, and that it is after the test start time.
-
-### Read Staleness: Stale Reads vs Strong Reads
-
-**Strong read:** Reads the most up-to-date data — guaranteed to see all committed writes. Slower because Spanner must coordinate across regions.
-
-**Stale read:** Reads data as of a past timestamp (e.g. 15 seconds ago). Faster because it does not need region coordination. Used for analytics/reporting where slight lag is acceptable.
-
-**QA implication:** If your application uses stale reads, your test assertions may read data before the write has fully propagated. Use strong reads in tests for deterministic results. Know the API option:
+**Test 2: Child insert rejected for non-existent parent**
 ```java
-// Strong read (always use this in tests)
-ReadContext ctx = dbClient.singleUse();
-
-// Stale read (application performance optimisation, avoid in tests)
-ReadContext ctx = dbClient.singleUse(TimestampBound.ofMaxStaleness(15, TimeUnit.SECONDS));
+@Test(expectedExceptions = SpannerException.class)
+public void insertOrderItem_forNonExistentParent_throwsSpannerException() {
+    // Interleaved tables enforce parent existence at insert time
+    spannerHelper.insertOrderItem("NONEXISTENT-ORDER-ID", "PROD-1", 1, 50.00);
+    // SpannerException thrown: parent key does not exist
+}
 ```
-
-### Mutations vs DML
-
-Two ways to write data in Spanner:
-
-**Mutations** — a batch of changes applied atomically at the end of a transaction. No individual round-trips per row:
-```java
-List<Mutation> mutations = new ArrayList<>();
-mutations.add(Mutation.newInsertBuilder("orders")
-    .set("order_id").to("abc123")
-    .set("amount").to(99.99)
-    .build());
-dbClient.write(mutations);  // all mutations applied in one commit
-```
-
-**DML (Data Manipulation Language)** — standard SQL `INSERT`, `UPDATE`, `DELETE` inside a read-write transaction. Familiar syntax but slightly higher latency per statement:
-```java
-dbClient.readWriteTransaction().run(transaction -> {
-    transaction.executeUpdate(
-        Statement.of("INSERT INTO orders (order_id, amount) VALUES ('abc123', 99.99)")
-    );
-    return null;
-});
-```
-
-**QA implication:** Your test setup and teardown may use either approach. Mutations are preferred for bulk test data setup (faster). DML is clearer for individual test data operations.
 
 ---
 
-## SECTION 3 — Testing Spanner with the Emulator
+**Q5: Why does Spanner use UUIDs instead of sequential integer IDs?**
 
-### What is the Spanner Emulator?
-The Cloud Spanner Emulator is a local, in-process implementation of Spanner. It supports the full Spanner API and SQL dialect without requiring a real GCP project, billing account, or network access. It is free and runs on your laptop or in CI.
+**A:**
 
-**Limitations of the emulator:**
-- No real distributed performance (single node)
-- No global region replication
+Spanner distributes data across splits (shards) by primary key range. If you use sequential integers (1, 2, 3, 4, 5...), every new insert goes to the same split — the one holding the highest key values. This is called a "hot spot." A single split becomes the bottleneck for all write traffic, destroying horizontal scalability.
+
+UUIDs are random 128-bit values (e.g. `f47ac10b-58cc-4372-a567-0e02b2c3d479`). Because they are random, consecutive inserts hit different splits, distributing write load evenly across all nodes.
+
+```java
+// BAD for Spanner — all writes hit the same shard (hot spot)
+long id = System.currentTimeMillis();   // sequential: 1718000001, 1718000002, ...
+int  id = ordersTable.getMaxId() + 1;   // sequential: 1001, 1002, 1003, ...
+
+// GOOD for Spanner — random, distributes evenly
+String id = UUID.randomUUID().toString();
+// e.g. "550e8400-e29b-41d4-a716-446655440000"
+```
+
+QA role: verify that the application uses UUIDs. A load test can confirm — insert 10,000 rows and measure write throughput. If throughput collapses as inserts continue (rather than remaining flat), suspect a sequential key hot spot.
+
+An alternative when you need human-readable sequential IDs: use bit-reversal. Take an auto-increment counter and bit-reverse the binary representation. The resulting values look random to Spanner's partitioner but decode to a sequential sequence in application logic. This is an advanced technique used by teams that need user-facing sequential IDs for customer support purposes.
+
+---
+
+**Q6: What is the Spanner emulator and how do you set it up for testing?**
+
+**A:**
+
+The Cloud Spanner Emulator is a local, in-process implementation of Spanner that runs on your laptop or in CI. It supports the full Spanner API and SQL dialect without requiring a real GCP project, billing account, or internet access. It is free.
+
+Limitations:
+- Single node — no real distributed behaviour or multi-region replication
 - Not suitable for performance/load testing
-- Some advanced features may lag behind the real Spanner
+- Some very new features may lag behind real Spanner
 
 For functional testing, the emulator is a complete substitute.
 
-### Install and Start the Emulator
-
+**Setup on local machine:**
 ```bash
-# Prerequisites: Google Cloud CLI (gcloud) installed
-
-# Install the emulator component
+# Option 1: via gcloud CLI
 gcloud components install cloud-spanner-emulator
-
-# Start the emulator (runs in the foreground — open a new terminal for other commands)
 gcloud emulators spanner start
-# Output: Cloud Spanner emulator running at [localhost:9010]
+# Output: Cloud Spanner emulator running at localhost:9010
 
-# In your test/CI environment, point all Spanner client calls to the emulator:
+# In a separate terminal — set the env var for your Java client
 export SPANNER_EMULATOR_HOST=localhost:9010
-```
 
-### Create an Instance and Database in the Emulator
+# Create instance (use emulator-config, not a real GCP region)
+gcloud config configurations create emulator
+gcloud config set auth/disable_credentials true
+gcloud config set project test-project
+gcloud config set api_endpoint_overrides/spanner http://localhost:9020/
 
-```bash
-# Use emulator config (not a real GCP region)
 gcloud spanner instances create test-instance \
   --config=emulator-config \
-  --description="Test instance for automated tests" \
+  --description="Local test instance" \
   --nodes=1
 
-# Create a database in the instance
-gcloud spanner databases create test-db \
-  --instance=test-instance
+# Create database
+gcloud spanner databases create test-db --instance=test-instance
 
-# Apply your schema DDL
-gcloud spanner databases ddl update test-db \
-  --instance=test-instance \
+# Apply DDL schema
+gcloud spanner databases ddl update test-db --instance=test-instance \
   --ddl="CREATE TABLE orders (
-    order_id     STRING(36) NOT NULL,
-    customer_id  STRING(36) NOT NULL,
-    amount       FLOAT64 NOT NULL,
-    status       STRING(20) NOT NULL,
-    created_at   TIMESTAMP NOT NULL OPTIONS (allow_commit_timestamp=true),
+    order_id    STRING(36) NOT NULL,
+    customer_id STRING(36) NOT NULL,
+    amount      FLOAT64    NOT NULL,
+    status      STRING(20) NOT NULL,
+    created_at  TIMESTAMP  NOT NULL OPTIONS (allow_commit_timestamp=true),
   ) PRIMARY KEY (order_id)"
 ```
 
-### Emulator in CI (Docker)
-
+**Setup in CI with Docker:**
 ```yaml
-# docker-compose.yml for CI
+# docker-compose.yml
 version: '3.8'
 services:
   spanner-emulator:
     image: gcr.io/cloud-spanner-emulator/emulator:latest
     ports:
-      - "9010:9010"
-      - "9020:9020"
+      - "9010:9010"   # gRPC port (Java client library)
+      - "9020:9020"   # HTTP port (REST API and health check)
     healthcheck:
       test: ["CMD", "curl", "-f", "http://localhost:9020"]
       interval: 5s
       timeout: 3s
-      retries: 5
+      retries: 10
 ```
 
 ```yaml
-# GitHub Actions: start emulator before tests
-- name: Start Spanner Emulator
-  run: |
-    docker run -d --name spanner-emulator \
-      -p 9010:9010 -p 9020:9020 \
-      gcr.io/cloud-spanner-emulator/emulator:latest
+# GitHub Actions workflow
+steps:
+  - name: Start Spanner Emulator
+    run: |
+      docker run -d --name spanner-emulator \
+        -p 9010:9010 -p 9020:9020 \
+        gcr.io/cloud-spanner-emulator/emulator:latest
+      # Wait for emulator to be ready
+      until curl -sf http://localhost:9020; do sleep 1; done
 
-- name: Set emulator env var
-  run: echo "SPANNER_EMULATOR_HOST=localhost:9010" >> $GITHUB_ENV
+  - name: Set emulator environment variable
+    run: echo "SPANNER_EMULATOR_HOST=localhost:9010" >> $GITHUB_ENV
 
-- name: Run tests
-  run: mvn test
+  - name: Create test instance and database
+    run: |
+      gcloud spanner instances create test-instance \
+        --config=emulator-config --nodes=1 --project=test-project
+      gcloud spanner databases create test-db \
+        --instance=test-instance --project=test-project
+      gcloud spanner databases ddl update test-db \
+        --instance=test-instance --project=test-project \
+        --ddl-file=schema/orders.sql
+
+  - name: Run tests
+    run: mvn test
 ```
+
+The Spanner Java client library reads `SPANNER_EMULATOR_HOST` and automatically routes all calls to the emulator. No code change is needed — the same Java code works against both the emulator and real Spanner.
 
 ---
 
-## SECTION 4 — SQL Queries for QA in Spanner
+**Q7: What SQL features are specific to Spanner that you use in test validation queries?**
 
-### Standard SQL (Same as MySQL/PostgreSQL)
+**A:**
 
-```sql
--- Basic SELECT with WHERE
-SELECT order_id, customer_id, amount, status
-FROM orders
-WHERE status = 'PENDING'
-  AND amount > 50.00
-ORDER BY amount DESC
-LIMIT 20;
-
--- JOIN
-SELECT o.order_id, o.amount, c.email
-FROM orders o
-JOIN customers c ON o.customer_id = c.customer_id
-WHERE o.status = 'ACTIVE';
-
--- Aggregation
-SELECT
-    status,
-    COUNT(*) AS order_count,
-    SUM(amount) AS total_revenue,
-    AVG(amount) AS avg_order_value
-FROM orders
-GROUP BY status
-ORDER BY order_count DESC;
-```
-
-### Spanner-Specific: Timestamp Queries
-
+**Timestamp functions:**
 ```sql
 -- Records created in the last 24 hours
 SELECT order_id, created_at
 FROM orders
 WHERE created_at > TIMESTAMP_SUB(CURRENT_TIMESTAMP(), INTERVAL 1 DAY);
 
--- Records in a specific date range
+-- Records between two timestamps
 SELECT order_id, amount
 FROM orders
 WHERE created_at BETWEEN TIMESTAMP('2024-01-01T00:00:00Z')
                      AND TIMESTAMP('2024-01-31T23:59:59Z');
 
--- Most recent record (useful in QA to get the record just created by the API)
-SELECT order_id, amount, created_at
+-- Most recently created record (useful to verify the record your API just wrote)
+SELECT order_id, amount, status, created_at
 FROM orders
 ORDER BY created_at DESC
 LIMIT 1;
 ```
 
-### Spanner-Specific: ARRAY and UNNEST
-
+**ARRAY columns and UNNEST:**
 ```sql
--- Spanner supports ARRAY columns
--- Unnest an array to query individual elements
+-- ARRAY type stores multiple values in a single column
+-- UNNEST flattens the array so you can query individual elements
 SELECT o.order_id, tag
 FROM orders o, UNNEST(o.tags) AS tag
 WHERE tag = 'PRIORITY';
 ```
 
-### Spanner-Specific: CTEs (WITH clause)
-
+**JSON columns (Spanner 2022+):**
 ```sql
--- Common Table Expression for readability
-WITH recent_orders AS (
-    SELECT order_id, customer_id, amount
-    FROM orders
-    WHERE created_at > TIMESTAMP_SUB(CURRENT_TIMESTAMP(), INTERVAL 7 DAY)
-),
-high_value_customers AS (
-    SELECT customer_id, SUM(amount) AS total_spend
-    FROM recent_orders
-    GROUP BY customer_id
-    HAVING SUM(amount) > 1000
-)
-SELECT c.email, h.total_spend
-FROM high_value_customers h
-JOIN customers c ON h.customer_id = c.customer_id
-ORDER BY h.total_spend DESC;
-```
-
-### Spanner-Specific: JSON Column
-
-```sql
--- Spanner supports JSON column type (since 2022)
--- Query a field inside a JSON column
+-- Query inside a JSON column using JSON_VALUE
 SELECT
     order_id,
     JSON_VALUE(metadata, '$.source') AS order_source,
@@ -346,27 +332,45 @@ FROM orders
 WHERE JSON_VALUE(metadata, '$.source') = 'mobile_app';
 ```
 
-### QA Validation Queries
-
+**CTEs (WITH clause) for readable QA validation queries:**
 ```sql
--- Completeness: count records created in the last test run
-SELECT COUNT(*) AS records_created_last_run
+WITH recent_orders AS (
+    SELECT order_id, customer_id, amount
+    FROM orders
+    WHERE created_at > TIMESTAMP_SUB(CURRENT_TIMESTAMP(), INTERVAL 1 HOUR)
+),
+high_value AS (
+    SELECT customer_id, SUM(amount) AS total
+    FROM recent_orders
+    GROUP BY customer_id
+    HAVING SUM(amount) > 500
+)
+SELECT c.email, h.total
+FROM high_value h
+JOIN customers c ON h.customer_id = c.customer_id
+ORDER BY h.total DESC;
+```
+
+**QA validation queries:**
+```sql
+-- Count records written by the last test run (within last 10 minutes)
+SELECT COUNT(*) AS records_just_written
 FROM orders
 WHERE created_at > TIMESTAMP_SUB(CURRENT_TIMESTAMP(), INTERVAL 10 MINUTE);
 
--- Integrity: find order_items with no matching parent order (orphan check)
+-- Find orphan child records (interleaved table integrity check)
 SELECT oi.order_id, oi.item_id
 FROM order_items oi
 LEFT JOIN orders o ON oi.order_id = o.order_id
 WHERE o.order_id IS NULL;
 
--- Validity: find invalid status values
+-- Find records with invalid status (constraint violation check)
 SELECT order_id, status
 FROM orders
 WHERE status NOT IN ('PENDING', 'ACTIVE', 'CANCELLED', 'COMPLETED');
 
--- Uniqueness: find duplicate order IDs (should return zero rows)
-SELECT order_id, COUNT(*) AS count
+-- Find duplicate primary keys (should return zero rows — Spanner enforces PK uniqueness)
+SELECT order_id, COUNT(*) AS cnt
 FROM orders
 GROUP BY order_id
 HAVING COUNT(*) > 1;
@@ -374,10 +378,15 @@ HAVING COUNT(*) > 1;
 
 ---
 
-## SECTION 5 — Testing Spanner via Java Client
+## SECTION 2 — JAVA CLIENT AND TEST CODE
 
-### Maven Dependency
+---
 
+**Q8: How do you connect to Spanner from Java tests? Show the complete SpannerTestHelper class.**
+
+**A:**
+
+Maven dependency:
 ```xml
 <dependency>
     <groupId>com.google.cloud</groupId>
@@ -386,15 +395,10 @@ HAVING COUNT(*) > 1;
 </dependency>
 ```
 
-### Complete Java Code — Connecting to Spanner (Emulator and Real)
-
 ```java
 package com.example.spanner;
 
 import com.google.cloud.spanner.*;
-import com.google.cloud.spanner.DatabaseClient;
-import com.google.cloud.spanner.SpannerOptions;
-
 import java.util.ArrayList;
 import java.util.List;
 import java.util.UUID;
@@ -405,41 +409,44 @@ public class SpannerTestHelper {
     private static final String INSTANCE_ID = "test-instance";
     private static final String DATABASE_ID = "test-db";
 
-    private final Spanner spanner;
+    private final Spanner       spanner;
     private final DatabaseClient dbClient;
 
     public SpannerTestHelper() {
-        SpannerOptions.Builder optionsBuilder = SpannerOptions.newBuilder()
-            .setProjectId(PROJECT_ID);
-
-        // If SPANNER_EMULATOR_HOST is set, the client library automatically
-        // uses the emulator — no code change needed
-        // export SPANNER_EMULATOR_HOST=localhost:9010
-
-        this.spanner = optionsBuilder.build().getService();
+        SpannerOptions options = SpannerOptions.newBuilder()
+            .setProjectId(PROJECT_ID)
+            .build();
+        // The library automatically reads SPANNER_EMULATOR_HOST env var.
+        // When set, all calls go to the emulator. No code change needed.
+        this.spanner  = options.getService();
         this.dbClient = spanner.getDatabaseClient(
             DatabaseId.of(PROJECT_ID, INSTANCE_ID, DATABASE_ID)
         );
     }
 
-    // ── Read a single row by primary key ─────────────────────────
+    // ── Read a single row by primary key (strong read) ──────────────
 
     public Struct readOrderById(String orderId) {
-        return dbClient.singleUse()      // strong read
+        return dbClient
+            .singleUse()   // strong read — guaranteed to see latest committed data
             .readRow(
                 "orders",
                 Key.of(orderId),
                 List.of("order_id", "customer_id", "amount", "status", "created_at")
             );
+        // Returns null if row not found
     }
 
-    // ── Read multiple rows with a SQL query ──────────────────────
+    // ── Read multiple rows via SQL query ─────────────────────────────
 
     public List<Struct> queryOrdersByCustomer(String customerId) {
         List<Struct> results = new ArrayList<>();
+        // Always use parameterised queries to prevent injection
         try (ResultSet rs = dbClient.singleUse().executeQuery(
-            Statement.newBuilder("SELECT order_id, amount, status, created_at "
-                + "FROM orders WHERE customer_id = @customerId ORDER BY created_at DESC")
+            Statement.newBuilder(
+                "SELECT order_id, amount, status, created_at " +
+                "FROM orders WHERE customer_id = @customerId " +
+                "ORDER BY created_at DESC")
                 .bind("customerId").to(customerId)
                 .build()
         )) {
@@ -450,25 +457,48 @@ public class SpannerTestHelper {
         return results;
     }
 
-    // ── Insert test data using Mutation API ──────────────────────
+    // ── Insert test data using Mutation API ──────────────────────────
+    // Mutations are batched and committed atomically — preferred for test setup
 
     public String insertTestOrder(String customerId, double amount) {
         String orderId = UUID.randomUUID().toString();
-        List<Mutation> mutations = new ArrayList<>();
-        mutations.add(
+        dbClient.write(List.of(
             Mutation.newInsertBuilder("orders")
                 .set("order_id").to(orderId)
                 .set("customer_id").to(customerId)
                 .set("amount").to(amount)
                 .set("status").to("PENDING")
-                .set("created_at").to(Value.COMMIT_TIMESTAMP)
+                .set("created_at").to(Value.COMMIT_TIMESTAMP)  // Spanner fills this in
                 .build()
-        );
-        dbClient.write(mutations);
-        return orderId;  // return the generated ID so the test can use it in assertions
+        ));
+        return orderId;
     }
 
-    // ── Delete test data in teardown ─────────────────────────────
+    public void insertOrderItem(String orderId, String productSku, int qty, double unitPrice) {
+        String itemId = UUID.randomUUID().toString();
+        dbClient.write(List.of(
+            Mutation.newInsertBuilder("order_items")
+                .set("order_id").to(orderId)
+                .set("item_id").to(itemId)
+                .set("product_sku").to(productSku)
+                .set("quantity").to((long) qty)
+                .set("unit_price").to(unitPrice)
+                .build()
+        ));
+    }
+
+    // ── Update a row ─────────────────────────────────────────────────
+
+    public void updateOrderStatus(String orderId, String newStatus) {
+        dbClient.write(List.of(
+            Mutation.newUpdateBuilder("orders")
+                .set("order_id").to(orderId)
+                .set("status").to(newStatus)
+                .build()
+        ));
+    }
+
+    // ── Delete by primary key ────────────────────────────────────────
 
     public void deleteOrder(String orderId) {
         dbClient.write(List.of(
@@ -476,50 +506,128 @@ public class SpannerTestHelper {
         ));
     }
 
-    // Delete by a test-run marker (clean up all data from this test run)
+    // ── Delete by query — clean up all test data from a test run ────
+
     public void deleteOrdersByCustomer(String customerId) {
         dbClient.readWriteTransaction().run(transaction -> {
-            transaction.executeUpdate(
+            // DML inside a read-write transaction
+            long deleted = transaction.executeUpdate(
                 Statement.newBuilder("DELETE FROM orders WHERE customer_id = @customerId")
                     .bind("customerId").to(customerId)
                     .build()
             );
+            System.out.println("Deleted " + deleted + " test orders for " + customerId);
             return null;
         });
     }
 
-    // ── Transaction example ───────────────────────────────────────
+    // ── Query order items for a given order ──────────────────────────
 
-    public void transferAmount(String fromOrderId, String toOrderId, double transferAmount) {
+    public List<Struct> queryItemsByOrder(String orderId) {
+        List<Struct> results = new ArrayList<>();
+        try (ResultSet rs = dbClient.singleUse().executeQuery(
+            Statement.newBuilder(
+                "SELECT item_id, product_sku, quantity, unit_price " +
+                "FROM order_items WHERE order_id = @orderId")
+                .bind("orderId").to(orderId)
+                .build()
+        )) {
+            while (rs.next()) results.add(rs.getCurrentRowAsStruct());
+        }
+        return results;
+    }
+
+    // ── Read-write transaction example ───────────────────────────────
+
+    public void transferAmount(String fromId, String toId, double amount) {
         dbClient.readWriteTransaction().run(transaction -> {
-            // Read both rows in the same transaction (consistent snapshot)
-            Struct from = transaction.readRow("orders", Key.of(fromOrderId), List.of("amount"));
-            Struct to   = transaction.readRow("orders", Key.of(toOrderId),   List.of("amount"));
+            Struct from = transaction.readRow("orders", Key.of(fromId), List.of("amount"));
+            Struct to   = transaction.readRow("orders", Key.of(toId),   List.of("amount"));
 
-            double newFromAmount = from.getDouble("amount") - transferAmount;
-            double newToAmount   = to.getDouble("amount")   + transferAmount;
-
-            if (newFromAmount < 0) {
-                throw new SpannerException(ErrorCode.FAILED_PRECONDITION, "Insufficient balance");
+            double newFrom = from.getDouble("amount") - amount;
+            if (newFrom < 0) {
+                throw SpannerExceptionFactory.newSpannerException(
+                    ErrorCode.FAILED_PRECONDITION, "Insufficient balance");
             }
 
             transaction.buffer(List.of(
-                Mutation.newUpdateBuilder("orders").set("order_id").to(fromOrderId).set("amount").to(newFromAmount).build(),
-                Mutation.newUpdateBuilder("orders").set("order_id").to(toOrderId).set("amount").to(newToAmount).build()
+                Mutation.newUpdateBuilder("orders")
+                    .set("order_id").to(fromId).set("amount").to(newFrom).build(),
+                Mutation.newUpdateBuilder("orders")
+                    .set("order_id").to(toId)
+                    .set("amount").to(to.getDouble("amount") + amount).build()
             ));
             return null;
         });
     }
 
-    // ── Cleanup ───────────────────────────────────────────────────
+    // ── Cleanup ───────────────────────────────────────────────────────
 
     public void close() {
-        spanner.close();
+        if (spanner != null && !spanner.isClosed()) {
+            spanner.close();
+        }
     }
 }
 ```
 
-### Using SpannerTestHelper in a TestNG Test
+---
+
+**Q9: What is the difference between the Mutations API and DML in Spanner?**
+
+**A:**
+
+Both write data to Spanner but have different mechanics and performance characteristics:
+
+**Mutations** — a list of write operations (INSERT, UPDATE, DELETE) accumulated in memory and committed atomically in one round-trip:
+```java
+// Build a list of mutations
+List<Mutation> mutations = new ArrayList<>();
+mutations.add(Mutation.newInsertBuilder("orders")
+    .set("order_id").to("abc123")
+    .set("amount").to(99.99)
+    .set("status").to("PENDING")
+    .build());
+mutations.add(Mutation.newInsertBuilder("order_items")
+    .set("order_id").to("abc123")
+    .set("item_id").to("item-1")
+    .set("quantity").to(2L)
+    .build());
+
+// One commit — both mutations applied atomically
+dbClient.write(mutations);
+```
+
+**DML** — standard SQL `INSERT`/`UPDATE`/`DELETE` executed inside a read-write transaction. Each statement is sent to Spanner and can read back results:
+```java
+dbClient.readWriteTransaction().run(transaction -> {
+    transaction.executeUpdate(
+        Statement.of("INSERT INTO orders (order_id, amount, status) " +
+                     "VALUES ('abc123', 99.99, 'PENDING')")
+    );
+    // Can also read within the same transaction
+    Struct row = transaction.readRow("orders", Key.of("abc123"), List.of("status"));
+    return null;
+});
+```
+
+| Feature | Mutations | DML |
+|---------|-----------|-----|
+| Syntax | Java builder API | Standard SQL |
+| Round trips | One commit for all | One per statement |
+| Can read within txn | Only buffered (not visible until commit) | Yes, can read own writes |
+| Performance | Faster for bulk ops | Slightly higher latency |
+| Readability | Verbose for complex logic | Familiar SQL |
+
+**QA recommendation**: use Mutations for bulk test data setup (inserting 100 test records) — faster. Use DML for individual operations where SQL readability matters or you need to read within the transaction.
+
+---
+
+**Q10: How do you verify that an API call wrote the correct data to Spanner?**
+
+**A:**
+
+The standard test pattern: call the API via HTTP, extract the entity ID from the response, then query Spanner directly to verify every field:
 
 ```java
 package com.example.tests;
@@ -531,237 +639,94 @@ import io.restassured.response.Response;
 import org.testng.annotations.*;
 import static org.testng.Assert.*;
 
-public class OrderApiSpannerTest {
-
-    private SpannerTestHelper spannerHelper;
-    private static final String TEST_CUSTOMER_ID = "TEST-CUST-" + java.util.UUID.randomUUID();
-
-    @BeforeClass
-    public void setUp() {
-        RestAssured.baseURI = "http://localhost:8080";
-        spannerHelper = new SpannerTestHelper();
-    }
-
-    @Test
-    public void postOrder_writesCorrectDataToSpanner() {
-        // 1. Send API request
-        Response response = RestAssured.given()
-            .contentType("application/json")
-            .body("{ \"customerId\": \"" + TEST_CUSTOMER_ID + "\", \"amount\": 149.99 }")
-            .post("/api/orders");
-
-        assertEquals(response.getStatusCode(), 201, "Expected 201 Created");
-
-        // 2. Get the order ID from the response
-        String orderId = response.jsonPath().getString("orderId");
-        assertNotNull(orderId, "orderId should be in the response");
-
-        // 3. Verify the data landed correctly in Spanner
-        Struct orderInDb = spannerHelper.readOrderById(orderId);
-        assertNotNull(orderInDb, "Order should exist in Spanner after POST");
-        assertEquals(orderInDb.getString("customer_id"), TEST_CUSTOMER_ID);
-        assertEquals(orderInDb.getDouble("amount"), 149.99, 0.001);
-        assertEquals(orderInDb.getString("status"), "PENDING");
-        assertFalse(orderInDb.isNull("created_at"), "created_at should be populated by Spanner");
-    }
-
-    @AfterClass
-    public void tearDown() {
-        // Clean up all test data created by this test class
-        spannerHelper.deleteOrdersByCustomer(TEST_CUSTOMER_ID);
-        spannerHelper.close();
-    }
-}
-```
-
----
-
-## SECTION 6 — Spanner-Specific Testing Considerations
-
-### Strong Reads vs Stale Reads in Tests
-
-| | Strong Read | Stale Read |
-|---|---|---|
-| **What it is** | Reads the very latest committed data | Reads data as of N seconds ago |
-| **Consistency** | Guaranteed up-to-date | May miss recent writes |
-| **Performance** | Slower (cross-region coordination) | Faster |
-| **Use in tests** | Always — guarantees you see what you just wrote | Never — may cause intermittent test failures |
-
-**Problem scenario:** Your test inserts a row, then immediately queries with a stale read. The stale read may not yet see the row, causing a false failure. Always use `dbClient.singleUse()` (strong read) in tests.
-
-### Interleaved Table Testing
-
-Verify the `ON DELETE CASCADE` behaviour:
-```java
-@Test
-public void deletingParentOrder_cascadesDeleteToOrderItems() {
-    // Setup: create parent order and child items
-    String orderId = spannerHelper.insertTestOrder(TEST_CUSTOMER_ID, 200.00);
-    spannerHelper.insertOrderItem(orderId, "PROD-1", 2, 100.00);  // 2 items
-
-    // Verify items exist before delete
-    List<Struct> itemsBefore = spannerHelper.queryItemsByOrder(orderId);
-    assertEquals(itemsBefore.size(), 2);
-
-    // Act: delete the parent order
-    spannerHelper.deleteOrder(orderId);
-
-    // Assert: all child items are also deleted (cascade)
-    List<Struct> itemsAfter = spannerHelper.queryItemsByOrder(orderId);
-    assertEquals(itemsAfter.size(), 0, "Cascade delete should remove all order items");
-}
-```
-
-Also test that inserting a child for a non-existent parent fails:
-```java
-@Test(expectedExceptions = SpannerException.class)
-public void insertOrderItem_forNonExistentOrder_throwsException() {
-    // Interleaved table: inserting a child row for a non-existent parent is rejected
-    spannerHelper.insertOrderItem("NONEXISTENT-ORDER-ID", "PROD-1", 1, 50.00);
-}
-```
-
-### Spanner Commit Latency
-
-Spanner's commit involves consensus across multiple replicas. In practice this takes ~5–20ms for regional instances, ~100ms for multi-region instances.
-
-**Implication for tests:** In most cases your Java test will see the write immediately because the Spanner client waits for the commit to complete before returning. You do NOT need to `Thread.sleep()` after a write before reading. However, if your test reads data through a caching layer or a service that uses stale reads, you may need to account for propagation time.
-
-### Global Consistency
-
-Unlike eventually consistent databases (Cassandra, DynamoDB in certain modes), Spanner guarantees that once a write commits, **every subsequent read anywhere in the world sees it**. This simplifies testing significantly — you never have to account for "the write hasn't propagated yet" scenarios (as long as you use strong reads).
-
-### Testing with Multiple Regions
-
-In production, Spanner instances can span multiple geographic regions. For testing:
-- The emulator simulates a single-node instance — no actual multi-region behaviour
-- Functional tests do not need multi-region instances
-- Performance/latency characteristics differ between emulator and real multi-region Spanner — do not benchmark on the emulator
-- When testing multi-region failure scenarios, you need a real GCP Spanner instance in a testing GCP project
-
----
-
-## SECTION 7 — RestAssured + Spanner Integration Test Pattern
-
-This is the most common QA pattern: call the API, then verify the data landed correctly in Spanner.
-
-```java
-package com.example.tests;
-
-import com.example.spanner.SpannerTestHelper;
-import com.google.cloud.spanner.Struct;
-import io.qameta.allure.*;
-import io.qameta.allure.restassured.AllureRestAssured;
-import io.restassured.RestAssured;
-import io.restassured.response.Response;
-import org.testng.annotations.*;
-import static org.testng.Assert.*;
-
-@Epic("Order Management")
-@Feature("Order Persistence")
-public class OrderPersistenceIntegrationTest {
+public class OrderPersistenceTest {
 
     private SpannerTestHelper spanner;
-    // Unique prefix to identify test data from this run
-    private final String TEST_RUN_ID = "TEST-" + java.util.UUID.randomUUID().toString().substring(0, 8);
+    // Unique marker for cleanup — avoids affecting other test data
+    private final String RUN_ID = "TEST-" + UUID.randomUUID().toString().substring(0, 8);
 
     @BeforeClass
     public void setUp() {
         RestAssured.baseURI = System.getProperty("api.base.url", "http://localhost:8080");
-        RestAssured.filters(new AllureRestAssured());  // auto-log requests/responses to Allure
         spanner = new SpannerTestHelper();
     }
 
-    // ─── Pattern 1: POST → verify in Spanner ─────────────────────
-
+    // Pattern 1: POST → verify all fields in Spanner
     @Test
-    @Story("POST /api/orders persists order with correct fields in Spanner")
-    @Severity(SeverityLevel.BLOCKER)
-    public void postOrder_persistsCorrectlyInSpanner() {
-        String customerId = TEST_RUN_ID + "-CUST-1";
+    public void postOrder_writesCorrectDataToSpanner() {
+        String customerId = RUN_ID + "-CUST-1";
         double amount = 249.99;
         String type = "PRIORITY";
 
-        // STEP 1: Call the API
-        Response createResponse = createOrderViaApi(customerId, amount, type);
-        assertEquals(createResponse.getStatusCode(), 201);
-        String orderId = createResponse.jsonPath().getString("orderId");
+        // 1. Call the API
+        Response response = RestAssured.given()
+            .contentType("application/json")
+            .body(String.format("{\"customerId\":\"%s\",\"amount\":%.2f,\"type\":\"%s\"}",
+                customerId, amount, type))
+            .post("/api/orders");
 
-        // STEP 2: Verify in Spanner
+        assertEquals(response.getStatusCode(), 201, "Expected 201 Created");
+        String orderId = response.jsonPath().getString("orderId");
+        assertNotNull(orderId, "orderId should be present in API response");
+
+        // 2. Verify the data in Spanner — strong read guarantees we see the write
         Struct order = spanner.readOrderById(orderId);
-        assertNotNull(order, "Order not found in Spanner — write did not persist");
+        assertNotNull(order, "Order should exist in Spanner — API write failed to persist");
         assertEquals(order.getString("customer_id"), customerId, "customer_id mismatch");
-        assertEquals(order.getDouble("amount"),      amount, 0.001,   "amount mismatch");
-        assertEquals(order.getString("status"),      "PENDING",       "initial status should be PENDING");
-        assertEquals(order.getString("type"),        type,            "type mismatch");
-        assertFalse(order.isNull("created_at"),     "created_at should be auto-populated");
+        assertEquals(order.getDouble("amount"), amount, 0.001, "amount mismatch");
+        assertEquals(order.getString("status"), "PENDING", "initial status should be PENDING");
+        assertEquals(order.getString("type"), type, "type mismatch");
+        assertFalse(order.isNull("created_at"), "created_at should be auto-populated by Spanner");
     }
 
-    // ─── Pattern 2: POST → PATCH → verify state transition in Spanner ──
-
+    // Pattern 2: POST → PATCH → verify state transition
     @Test
-    @Story("PATCH /api/orders/{id}/confirm updates status to CONFIRMED in Spanner")
-    @Severity(SeverityLevel.CRITICAL)
-    public void confirmOrder_updatesStatusInSpanner() {
-        // Seed: create an order via API
-        String customerId = TEST_RUN_ID + "-CUST-2";
-        Response createResponse = createOrderViaApi(customerId, 99.99, "STANDARD");
-        String orderId = createResponse.jsonPath().getString("orderId");
-
-        // Act: confirm the order
-        Response confirmResponse = RestAssured.given()
+    public void confirmOrder_updatesStatusToConfirmedInSpanner() {
+        String customerId = RUN_ID + "-CUST-2";
+        Response createResp = RestAssured.given()
             .contentType("application/json")
-            .patch("/api/orders/" + orderId + "/confirm");
-        assertEquals(confirmResponse.getStatusCode(), 200);
+            .body("{\"customerId\":\"" + customerId + "\",\"amount\":99.99}")
+            .post("/api/orders");
+        String orderId = createResp.jsonPath().getString("orderId");
 
-        // Verify: status updated in Spanner
+        // Confirm the order
+        Response confirmResp = RestAssured.given()
+            .patch("/api/orders/" + orderId + "/confirm");
+        assertEquals(confirmResp.getStatusCode(), 200);
+
+        // Verify status updated in Spanner
         Struct order = spanner.readOrderById(orderId);
         assertEquals(order.getString("status"), "CONFIRMED",
-            "Status should be CONFIRMED after calling /confirm endpoint");
+            "Status should be CONFIRMED after /confirm call");
         assertFalse(order.isNull("confirmed_at"),
-            "confirmed_at timestamp should be populated after confirmation");
+            "confirmed_at timestamp should be set after confirmation");
     }
 
-    // ─── Pattern 3: DELETE → verify record gone from Spanner ─────
-
+    // Pattern 3: DELETE → verify record gone from Spanner
     @Test
-    @Story("DELETE /api/orders/{id} removes record from Spanner")
-    @Severity(SeverityLevel.CRITICAL)
     public void deleteOrder_removesRecordFromSpanner() {
-        String customerId = TEST_RUN_ID + "-CUST-3";
-        Response createResponse = createOrderViaApi(customerId, 49.99, "STANDARD");
-        String orderId = createResponse.jsonPath().getString("orderId");
+        String customerId = RUN_ID + "-CUST-3";
+        Response createResp = RestAssured.given()
+            .contentType("application/json")
+            .body("{\"customerId\":\"" + customerId + "\",\"amount\":49.99}")
+            .post("/api/orders");
+        String orderId = createResp.jsonPath().getString("orderId");
 
-        // Act: delete via API
-        Response deleteResponse = RestAssured.given().delete("/api/orders/" + orderId);
-        assertEquals(deleteResponse.getStatusCode(), 204);
+        // Delete via API
+        Response deleteResp = RestAssured.given().delete("/api/orders/" + orderId);
+        assertEquals(deleteResp.getStatusCode(), 204);
 
-        // Verify: record no longer in Spanner
+        // Verify record no longer exists in Spanner
         Struct order = spanner.readOrderById(orderId);
         assertNull(order, "Order should not exist in Spanner after DELETE");
     }
 
-    // ─── Helper ──────────────────────────────────────────────────
-
-    @Step("Call POST /api/orders: customerId={customerId}, amount={amount}, type={type}")
-    private Response createOrderViaApi(String customerId, double amount, String type) {
-        String payload = String.format(
-            "{ \"customerId\": \"%s\", \"amount\": %.2f, \"type\": \"%s\" }",
-            customerId, amount, type
-        );
-        return RestAssured.given()
-            .contentType("application/json")
-            .header("Authorization", "Bearer " + System.getenv("TEST_AUTH_TOKEN"))
-            .body(payload)
-            .post("/api/orders");
-    }
-
     @AfterClass
     public void tearDown() {
-        // Clean up all test data from this run by the test prefix
-        spanner.deleteOrdersByCustomer(TEST_RUN_ID + "-CUST-1");
-        spanner.deleteOrdersByCustomer(TEST_RUN_ID + "-CUST-2");
-        spanner.deleteOrdersByCustomer(TEST_RUN_ID + "-CUST-3");
+        // Delete all test data created by this test class
+        for (int i = 1; i <= 3; i++) {
+            spanner.deleteOrdersByCustomer(RUN_ID + "-CUST-" + i);
+        }
         spanner.close();
     }
 }
@@ -769,121 +734,242 @@ public class OrderPersistenceIntegrationTest {
 
 ---
 
-## SECTION 8 — Common Spanner Issues in Testing
+**Q11: What are stale reads vs strong reads in Spanner?**
 
-### Quota Errors on the Emulator
-
-**Symptom:** `RESOURCE_EXHAUSTED: Quota exceeded` error when running many tests.
-
-**Cause:** The emulator has limits on the number of concurrent sessions, transactions, or database operations.
-
-**Fix:**
-```bash
-# Restart the emulator to reset its state
-gcloud emulators spanner stop
-gcloud emulators spanner start
-
-# Or if running via Docker:
-docker restart spanner-emulator
-```
-
-**Prevention:** Always call `spanner.close()` / `session.close()` in your test teardown. Unclosed sessions accumulate and exhaust the session pool.
-
-### Hot Spots from Sequential Keys
-
-**Symptom:** Excellent performance locally but severe write throughput degradation under load in production Spanner.
-
-**Cause:** Sequential integer IDs (1, 2, 3, 4...) mean all inserts go to the same Spanner split (shard), creating a hot spot. Spanner cannot distribute the load.
-
-**Fix in tests:** Generate UUIDs. They are random and distribute evenly across splits.
+**A:**
 
 ```java
-// BAD — do not use for Spanner primary keys
-long orderId = System.currentTimeMillis();  // sequential, creates hot spot
+// STRONG READ (default) — reads the most up-to-date committed data
+// Spanner coordinates across replicas — slightly slower
+// ALWAYS use strong reads in tests
+ReadContext strongCtx = dbClient.singleUse();   // default = strong
+Struct row = strongCtx.readRow("orders", Key.of(orderId), columns);
 
-// GOOD — random distribution
-String orderId = UUID.randomUUID().toString();
+// STALE READ — reads data as of a past timestamp
+// Does NOT need cross-region coordination — faster
+// Used in production for analytics/reporting where slight lag is acceptable
+// NEVER use in tests — may return data that doesn't include recent test writes
 
-// ALTERNATIVE — bit-reversed integers (sequential externally, random internally)
-// Used when you need a human-readable sequential ID but want Spanner distribution
+// Exact staleness — data as of exactly 10 seconds ago
+ReadContext staleCtx = dbClient.singleUse(
+    TimestampBound.ofExactStaleness(10, TimeUnit.SECONDS));
+
+// Max staleness — data no older than 15 seconds (Spanner picks the freshest available)
+ReadContext maxStaleCtx = dbClient.singleUse(
+    TimestampBound.ofMaxStaleness(15, TimeUnit.SECONDS));
+
+// Read at a specific past timestamp
+ReadContext atTimeCtx = dbClient.singleUse(
+    TimestampBound.ofReadTimestamp(Timestamp.ofTimeSecondsAndNanos(epochSeconds, 0)));
 ```
 
-**QA role:** Add a test that inserts 10,000 rows and measures throughput. If throughput degrades significantly as count increases, suspect a hot-spot key design.
+**Why stale reads exist:** In a globally distributed system, coordinating a read across replicas in multiple regions takes time (cross-region network latency). If your analytics dashboard is querying historical data, exact consistency to the millisecond does not matter. Stale reads skip the coordination step and return immediately, using the local replica's cached data.
 
-### Session Pool Exhaustion
+**Why you must not use stale reads in tests:** If your test inserts a row then immediately reads with a 10-second stale read, the read returns data as of 10 seconds ago — before your insert. The row will appear not to exist, causing a false test failure. Always use `dbClient.singleUse()` with no argument (defaults to strong read) in test assertions.
 
-**Symptom:** `RESOURCE_EXHAUSTED: Too many active sessions` or tests hanging waiting for a session.
+---
 
-**Cause:** Your test code opens Spanner connections/sessions but does not close them in teardown.
+**Q12: What is session pool management in Spanner tests and why does it matter?**
 
-**Fix:**
+**A:**
+
+The Spanner Java client maintains a pool of sessions internally. Sessions are persistent connections to Spanner used to execute queries and transactions. The pool has a limited number of sessions (default: minimum 100, maximum 400 per `DatabaseClient`).
+
+In tests, the risk is **session leaks** — acquiring a session and never returning it, causing the pool to exhaust. Symptoms: tests hang waiting for a session, or you get `RESOURCE_EXHAUSTED: Too many active sessions`.
+
 ```java
-// Always use try-with-resources or call close() in @AfterClass
+// PROBLEM: ResultSet not closed → session not returned to pool
+public List<Struct> badQueryMethod(String customerId) {
+    List<Struct> results = new ArrayList<>();
+    ResultSet rs = dbClient.singleUse().executeQuery(...);  // acquires session
+    while (rs.next()) results.add(rs.getCurrentRowAsStruct());
+    // rs never closed → session never returned to pool!
+    return results;
+}
 
-// Option 1: try-with-resources
-try (Spanner spanner = SpannerOptions.newBuilder().build().getService()) {
-    DatabaseClient db = spanner.getDatabaseClient(...);
-    // use db
-}  // spanner.close() called automatically
+// FIX: always use try-with-resources for ResultSet
+public List<Struct> goodQueryMethod(String customerId) {
+    List<Struct> results = new ArrayList<>();
+    try (ResultSet rs = dbClient.singleUse().executeQuery(...)) {  // auto-closed
+        while (rs.next()) results.add(rs.getCurrentRowAsStruct());
+    }
+    return results;
+}
 
-// Option 2: @AfterClass teardown
+// Also: close the Spanner client in @AfterClass/@AfterSuite
 @AfterClass
 public void tearDown() {
-    if (spanner != null) {
-        spanner.close();  // releases all sessions back to the pool
+    spannerHelper.close();  // closes all sessions in the pool
+}
+
+// Or use try-with-resources for the entire SpannerTestHelper
+try (SpannerTestHelper helper = new SpannerTestHelper()) {
+    // ... tests
+}  // close() called automatically
+```
+
+Configure session pool for test usage (fewer sessions needed):
+```java
+SessionPoolOptions poolOptions = SessionPoolOptions.newBuilder()
+    .setMinSessions(5)    // don't pre-create 100 sessions for small test suite
+    .setMaxSessions(25)   // cap to avoid exhaustion
+    .build();
+
+SpannerOptions options = SpannerOptions.newBuilder()
+    .setProjectId(PROJECT_ID)
+    .setSessionPoolOption(poolOptions)
+    .build();
+```
+
+---
+
+## SECTION 3 — COMMON ERRORS AND INTERVIEW Q&A
+
+---
+
+**Q13: What are the most common Spanner errors in testing and how do you fix them?**
+
+**A:**
+
+**Error 1: RESOURCE_EXHAUSTED: Quota exceeded**
+```
+com.google.cloud.spanner.SpannerException: RESOURCE_EXHAUSTED: Quota exceeded for quota metric...
+```
+Cause: Session pool exhausted (too many open sessions), or emulator memory limit hit.
+Fix:
+```java
+// Always close ResultSet and Spanner client
+try (ResultSet rs = dbClient.singleUse().executeQuery(...)) { ... }
+// @AfterClass: spannerHelper.close()
+
+// Restart emulator if exhausted
+// docker restart spanner-emulator
+```
+
+**Error 2: NOT_FOUND: Instance or database does not exist**
+```
+com.google.cloud.spanner.SpannerException: NOT_FOUND: Instance test-instance not found
+```
+Cause: Emulator started but instance/database not yet created.
+Fix: Run the `gcloud spanner instances create` and `gcloud spanner databases create` commands before running tests. In CI, add a setup step before the test step.
+
+**Error 3: INVALID_ARGUMENT: Value has wrong type**
+```
+INVALID_ARGUMENT: Expected type INT64 but got STRING at field quantity
+```
+Cause: Spanner types are strict. An INT64 column rejects a Java `int` — must use `long`.
+Fix:
+```java
+// Spanner INT64 requires Java long
+.set("quantity").to((long) quantity)   // cast int to long
+
+// Spanner FLOAT64 requires Java double
+.set("amount").to(amount)   // double is fine
+
+// TIMESTAMP column using commit timestamp
+.set("created_at").to(Value.COMMIT_TIMESTAMP)   // not a manual timestamp
+```
+
+**Error 4: ALREADY_EXISTS: Row already exists for key**
+```
+ALREADY_EXISTS: Row with key (abc123) already exists in table orders
+```
+Cause: Inserting a row with a primary key that already exists. Use `newInsertOrUpdateBuilder` or generate a new UUID.
+Fix:
+```java
+// Option 1: always generate a new UUID
+String orderId = UUID.randomUUID().toString();  // guaranteed unique
+
+// Option 2: use insert-or-update (upsert)
+Mutation.newInsertOrUpdateBuilder("orders")
+    .set("order_id").to(orderId)
+    ...
+```
+
+**Error 5: Data not found after insert (stale read)**
+```
+java.lang.AssertionError: Expected order to exist in Spanner but got null
+```
+Cause: Using a stale read context instead of strong read.
+Fix: Always use `dbClient.singleUse()` with no arguments (strong read) in test assertions.
+
+**Error 6: FAILED_PRECONDITION: Interleaved table parent key not found**
+```
+FAILED_PRECONDITION: Parent key does not exist for row being inserted into order_items
+```
+Cause: Inserting a child row in an interleaved table before its parent exists.
+Fix: Always insert the parent row first, then child rows.
+
+---
+
+**Q14: What is Google Cloud Spanner and when would you use it? (Interview answer)**
+
+**A:** Google Cloud Spanner is a fully managed, globally distributed relational database that provides horizontal scalability, ACID transactions, and strong consistency across multiple geographic regions. You choose Spanner when your application needs to serve users globally, requires strict consistency — not eventual consistency — and has outgrown the vertical scaling limits of a traditional relational database. Examples include a global payments platform where every region must see the same account balance, or a multi-region SaaS product that needs 99.999% availability. I have worked with Spanner in a GCP-based platform, writing Java integration tests that connect to the Spanner emulator in CI and verify that API writes persist the correct data with the correct field values.
+
+---
+
+**Q15: How does Spanner differ from MySQL for QA purposes?**
+
+**A:** Five key differences matter for test code. First, no auto-increment — I must generate UUIDs in test data setup scripts, not rely on the database to generate IDs. Second, no ENUM type — status values use STRING with CHECK constraints, and I write specific tests to verify invalid status values are rejected. Third, interleaved tables — I explicitly test cascade delete (deleting a parent removes all children) and parent existence enforcement (inserting a child for a non-existent parent throws a SpannerException). Fourth, always use strong reads in test assertions — stale reads intentionally ignore recent writes and cause false test failures. Fifth, the Spanner emulator — identical to real Spanner for functional tests, set up by the `SPANNER_EMULATOR_HOST` environment variable, no code change needed.
+
+---
+
+**Q16: How do you test with the Spanner emulator in a CI pipeline?**
+
+**A:** I run the emulator as a Docker container — `gcr.io/cloud-spanner-emulator/emulator:latest` — started before the test step. I set `SPANNER_EMULATOR_HOST=localhost:9010` in the CI environment variables, which the Spanner Java client library reads automatically. Then I run the `gcloud spanner` CLI to create the test instance, database, and apply the DDL schema. The tests then run pointing at the emulator. This approach works identically in GitHub Actions (using `docker run` in a step) and Jenkins (using Docker Compose). The emulator supports the full Spanner API, so any functional test that works on the emulator behaves the same on real Spanner — except for performance characteristics.
+
+---
+
+**Q17: What does "strong consistency" mean and why does it simplify testing?**
+
+**A:** Strong consistency means that once a Spanner write transaction commits, every subsequent read — from any node, in any geographic region — is guaranteed to see that write. There is no propagation delay. After `dbClient.write(mutations)` returns, the next `dbClient.singleUse().readRow(...)` will always find the written data. I do not need `Thread.sleep()`, retry loops, or polling logic waiting for data to appear. By contrast, testing against an eventually consistent database like DynamoDB in async mode requires polling: "insert, wait 500ms, read, if null wait another 500ms, retry up to 5 times." That logic makes tests slower, more complex, and still not deterministic. Strong consistency makes Spanner test assertions as simple as "write then immediately read and assert" — which is the correct way to write tests.
+
+---
+
+**Q18: What is the QA pattern for verifying that an API call persisted data correctly to Spanner?**
+
+**A:** The pattern is three steps: (1) Call the API endpoint using RestAssured — for example, POST `/api/orders` with a JSON payload; (2) Extract the entity ID from the API response body — for example, `response.jsonPath().getString("orderId")`; (3) Query Spanner directly using `SpannerTestHelper.readOrderById(orderId)` and assert every field matches what was sent. The assertions cover: the correct customer ID, amount, type, that status is set to the expected initial value, and that auto-populated fields like `created_at` are not null. The test teardown calls `spanner.deleteOrdersByCustomer(testCustomerId)` to clean up. I use a unique test-run ID prefix (e.g. `TEST-f47ac10b-CUST-1`) in customer IDs so cleanup can target exactly the test data without risking deleting production or other test data.
+
+---
+
+**Q19: What is the difference between Spanner and Cloud SQL?**
+
+**A:** Both are Google Cloud managed databases but they solve different problems. Cloud SQL is a managed version of MySQL, PostgreSQL, or SQL Server — single regional instance, familiar features including sequences and ENUMs, standard SQL. It scales vertically (larger machine) and has a read replica for read scaling. Cloud SQL is the right choice for most traditional web applications that need a managed database without the operational overhead. Cloud Spanner is a custom database engine built by Google — globally distributed across multiple regions, horizontally scalable by adding nodes, no sequential key sequences, requires UUID keys, and provides strong consistency across regions. Spanner is more expensive (roughly 3-10x per GB of storage) and requires more adaptation of application code. Choose Cloud SQL when your traffic fits in a single region and your existing relational data model is straightforward. Choose Spanner when you need global reach, horizontal write scalability beyond what a single large VM can provide, and strong consistency guarantees across those regions.
+
+---
+
+**Q20: What are interleaved tables and what do you specifically test about them?**
+
+**A:** Interleaved tables are a Spanner-specific physical co-location mechanism — child rows are stored adjacent to their parent row on disk, making parent+children reads very fast because they are on the same storage shard. They are defined with `INTERLEAVE IN PARENT tableName` in the CREATE TABLE DDL. For QA, two behaviours require explicit testing. First, cascade delete: if the schema uses `ON DELETE CASCADE`, deleting the parent order should automatically delete all its order_items. I create a test that creates a parent with multiple children, deletes the parent, then asserts `queryItemsByOrder(orderId).size() == 0`. Second, parent existence enforcement: inserting a child row for a non-existent parent should be rejected. I use `@Test(expectedExceptions = SpannerException.class)` to assert that the insert throws an exception. These tests verify that the schema enforces the relationship correctly, which matters because Spanner interleaving is not the same as a traditional MySQL foreign key constraint.
+
+---
+
+**Q21: Common Spanner session management pitfall — explain and fix it.**
+
+**A:** The most common pitfall is a **session leak** — opening a `ResultSet` or starting a transaction and never closing it. The Spanner client has a session pool with a default maximum of 400 sessions per `DatabaseClient`. Each unclosed `ResultSet` holds a session. After enough test methods run without cleanup, the pool exhausts and tests hang indefinitely waiting for a free session.
+
+```java
+// WRONG — ResultSet never closed, session leaked
+ResultSet rs = dbClient.singleUse().executeQuery(statement);
+while (rs.next()) { results.add(rs.getCurrentRowAsStruct()); }
+// rs and its session are never returned to pool
+
+// CORRECT — try-with-resources closes ResultSet automatically
+try (ResultSet rs = dbClient.singleUse().executeQuery(statement)) {
+    while (rs.next()) { results.add(rs.getCurrentRowAsStruct()); }
+}  // rs.close() called here, session returned to pool
+
+// Also close the Spanner client in @AfterClass
+@AfterClass
+public void tearDown() {
+    if (spannerHelper != null) {
+        spannerHelper.close();  // closes all pooled sessions
     }
 }
 ```
 
-### Timestamp in Future Error
-
-**Symptom:** `INVALID_ARGUMENT: Timestamp is in the future` when inserting with `PENDING_COMMIT_TIMESTAMP()`.
-
-**Cause:** The `PENDING_COMMIT_TIMESTAMP()` sentinel value is set in the wrong field type, or the field is not defined with `OPTIONS (allow_commit_timestamp=true)`.
-
-**Fix:**
-```java
-// Correct way to use commit timestamp:
-Mutation.newInsertBuilder("orders")
-    .set("order_id").to("abc123")
-    .set("created_at").to(Value.COMMIT_TIMESTAMP)  // correct: Value.COMMIT_TIMESTAMP constant
-    .build();
-
-// Schema must have:
-// created_at TIMESTAMP NOT NULL OPTIONS (allow_commit_timestamp=true)
-
-// WRONG — do not set a future timestamp manually:
-// .set("created_at").to(Timestamp.ofTimeMicroseconds(futureTime))  // may fail
-```
+Detection: if tests start hanging after the first few hundred test methods, suspect session exhaustion. Add logging: `SpannerOptions.newBuilder().setNumChannels(4)` and monitor via Cloud Monitoring (for real Spanner) or emulator logs.
 
 ---
 
-## SECTION 9 — Interview Q&A
-
-### Q1: What is Google Cloud Spanner and when would you use it?
-**A:** Google Cloud Spanner is a fully managed, globally distributed relational database that provides horizontal scalability, ACID transactions, and strong consistency across multiple geographic regions. You would choose Spanner when your application needs to serve users globally, requires strict consistency (not eventual consistency), and has outgrown the vertical scaling limits of a traditional relational database like MySQL or PostgreSQL. Examples: a global payments platform where all regions must see the same balance, or a multi-region SaaS product that needs 99.999% availability with zero downtime for maintenance.
-
-### Q2: How does Spanner differ from MySQL or PostgreSQL?
-**A:** The key differences that matter for testing are: (1) No auto-increment — you must generate your own IDs (UUIDs) because sequential keys cause write hot spots; (2) No ENUM type — use STRING with CHECK constraints; (3) Interleaved tables — child rows are physically co-located with parent rows for performance, with optional cascade delete behaviour; (4) Two write APIs — Mutations (batch commit) and DML (SQL statements) — each with different performance characteristics; (5) Strong vs stale reads — Spanner lets you choose between guaranteed-current reads and faster slightly-stale reads; (6) Commit timestamps — Spanner can auto-populate a timestamp column with the exact server commit time. For testing, the most important differences are UUID keys, no sequences, and always using strong reads.
-
-### Q3: How do you test with the Spanner emulator?
-**A:** Set the environment variable `SPANNER_EMULATOR_HOST=localhost:9010` before running tests. The Spanner Java client library automatically detects this variable and routes all calls to the local emulator instead of real GCP — no code change needed. I create a test instance and database using `gcloud spanner` CLI commands, apply the schema DDL, then run tests against it. In CI I run the emulator as a Docker container (`gcr.io/cloud-spanner-emulator/emulator:latest`), start it before the test step, and set the env var in the GitHub Actions or Jenkins environment. The emulator supports the full Spanner API, so all functional tests that work on the emulator should work on real Spanner.
-
-### Q4: What does "strong consistency" mean and why does it matter for testing?
-**A:** Strong consistency means that once a write transaction commits to Spanner, every subsequent read — from any node, in any geographic region — is guaranteed to see that write. There is no "eventual consistency" propagation delay. This is a major advantage for testing: after calling `dbClient.write(mutations)`, the very next `dbClient.singleUse().readRow(...)` is guaranteed to see the written data. I do not need `Thread.sleep()` or retry logic waiting for data to propagate. By contrast, if I were testing against an eventually consistent database like Cassandra, I might need to poll and wait for reads to catch up to writes, which makes tests fragile. Always use strong reads (the default `singleUse()` context) in tests — stale reads can return data from before your test write.
-
-### Q5: How does QA verify data written to Spanner via an API?
-**A:** The standard pattern is: (1) Call the API endpoint (e.g. POST /api/orders) using RestAssured; (2) Extract the entity ID from the API response (e.g. `orderId`); (3) Query Spanner directly using the Java Spanner client with `dbClient.singleUse().readRow("orders", Key.of(orderId), columns)`; (4) Assert each field matches the expected value (correct customer ID, correct amount, status is PENDING, created_at is not null). This verifies the full write path — API received the request, business logic processed it correctly, and the data persisted to the database with the correct values. The test teardown deletes the test record from Spanner to keep the database clean.
-
-### Q6: What is the difference between Spanner and Cloud SQL?
-**A:** Both are Google Cloud managed databases but they serve different use cases. **Cloud SQL** is a managed version of MySQL, PostgreSQL, or SQL Server — familiar features, sequences, ENUMs, standard SQL — running on a single regional instance with vertical scaling. It is easier to migrate existing applications to. **Cloud Spanner** is a custom database engine built by Google — globally distributed, horizontally scalable, no hot-spot keys, strong global consistency. Spanner is more expensive and requires adapting application code (no sequences, UUID keys). Choose Cloud SQL when you need a familiar managed MySQL/PostgreSQL without global distribution needs. Choose Spanner when you need global reach, horizontal write scalability, and strong consistency across regions. From a QA perspective, testing Cloud SQL is essentially testing MySQL/PostgreSQL. Testing Spanner requires understanding its unique constraints.
-
-### Q7: What are interleaved tables and what do you test about them?
-**A:** Interleaved tables are a Spanner-specific physical co-location of parent and child rows — child rows are stored adjacent to their parent row on disk for faster reads. They are defined with `INTERLEAVE IN PARENT table_name` in the DDL. From a testing perspective, two behaviours require explicit testing: (1) **Cascade delete** — if the child table is created with `ON DELETE CASCADE`, deleting the parent row should automatically delete all its child rows; I write a test that creates a parent + multiple children, deletes the parent, then asserts the children are also gone; (2) **Parent existence enforcement** — you cannot insert a child row if its parent does not exist; I write a test that attempts to insert a child for a non-existent parent and asserts a `SpannerException` is thrown.
-
-### Q8: How does your GCP experience at Qoria Lanka apply to Spanner testing?
-**A:** At Qoria Lanka I work on a GCP-hosted platform, which means I am familiar with the GCP ecosystem — service accounts, IAM permissions, the gcloud CLI, GCP project structure, and working with managed GCP services in a CI/CD pipeline. For Spanner specifically, this translates to: knowing how to authenticate to GCP from CI (using service account JSON key or Workload Identity Federation), understanding GCP project and instance hierarchy (project > instance > database), and being comfortable with gcloud CLI commands for managing databases and applying DDL. I can set up the Spanner emulator in Docker for local and CI testing, write Java integration tests that switch between emulator (for CI) and real Spanner (for staging) via the `SPANNER_EMULATOR_HOST` env var, and interpret Spanner errors from GCP Cloud Logging when debugging test failures against a real GCP environment.
-
----
-
-*Guide covers: Spanner concepts, differences from MySQL/PostgreSQL, emulator setup, Spanner SQL for QA, Java client code with full examples, integration test patterns with RestAssured, common testing issues, and interview Q&A.*
+*Guide covers 21 questions: Spanner fundamentals, comparison with MySQL/PostgreSQL, strong vs eventual consistency, interleaved tables, UUID keys, emulator setup with gcloud and Docker, Spanner-specific SQL, complete Java SpannerTestHelper class, Mutations vs DML, full API-to-Spanner verification test pattern, stale vs strong reads, session pool management, common errors with fixes, and 8 interview Q&A questions.*
