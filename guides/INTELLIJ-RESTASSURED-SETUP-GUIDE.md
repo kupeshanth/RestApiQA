@@ -1710,4 +1710,552 @@ Step 5: Hover your mouse over any variable → tooltip shows its value
 
 ---
 
-*Setup Guide — IntelliJ IDEA + RestAssured + TestNG | Java API Testing | Full Troubleshooting*
+---
+
+## PART 8 — JSON SCHEMA VALIDATION — FULL SETUP + CLASSPATH + DEBUG
+
+---
+
+### What is JSON Schema Validation?
+
+Instead of asserting field-by-field, JSON Schema validates the **entire response structure** in one line. If a developer renames a field or changes its type, the schema test catches it automatically.
+
+```java
+// Without schema — assert every field manually
+.body("id",     notNullValue())
+.body("title",  isA(String.class))
+.body("body",   isA(String.class))
+.body("userId", isA(Integer.class))
+
+// WITH schema — one line validates ALL fields + types + required
+.body(matchesJsonSchemaInClasspath("schemas/post-schema.json"))
+// If "userId" is renamed to "user_id" → this test FAILS automatically
+```
+
+---
+
+### Step 1 — Add the dependency to pom.xml
+
+```xml
+<!-- This MUST be in pom.xml — it's a separate library from rest-assured -->
+<dependency>
+    <groupId>io.rest-assured</groupId>
+    <artifactId>json-schema-validator</artifactId>
+    <version>5.3.1</version>   <!-- MUST match your rest-assured version -->
+    <scope>test</scope>
+</dependency>
+```
+
+After adding → refresh Maven in IntelliJ (click ↻ in Maven panel).
+
+---
+
+### Step 2 — Create the schema file in the CORRECT location
+
+**This is where most people go wrong.**
+
+```
+The file MUST be inside:
+  src/test/resources/schemas/post-schema.json
+
+NOT:
+  src/test/java/schemas/post-schema.json      ← WRONG
+  src/main/resources/schemas/post-schema.json ← WRONG
+  schemas/post-schema.json (in project root)  ← WRONG
+```
+
+**Why does location matter?**
+`matchesJsonSchemaInClasspath("schemas/post-schema.json")` searches the **classpath**, which in Maven projects maps to `src/test/resources/`. That folder is automatically added to the classpath when tests run.
+
+---
+
+### Step 3 — Mark resources folder correctly in IntelliJ
+
+**This is the most commonly missed step.**
+
+```
+1. In IntelliJ project panel (left side), find:
+   src/test/resources/
+
+2. Right-click the resources folder
+
+3. Click: Mark Directory As → Test Resources Root
+
+4. The folder icon should turn ORANGE/YELLOW
+   (Blue = Source Root, Orange = Resources Root)
+
+If the folder is NOT marked as Test Resources Root:
+   → Maven doesn't add it to the classpath
+   → matchesJsonSchemaInClasspath() gets FileNotFoundException
+   → Schema tests fail even though the file exists
+```
+
+**How to verify it's marked correctly:**
+```
+In IntelliJ: File → Project Structure → Modules → test tab
+You should see: src/test/resources listed as "Test Resources"
+If not → click + → add the folder → mark as Test Resources
+```
+
+---
+
+### Step 4 — Create the schema file
+
+**Location:** `src/test/resources/schemas/post-schema.json`
+
+```json
+{
+  "$schema": "http://json-schema.org/draft-04/schema#",
+  "title": "Post Schema",
+  "type": "object",
+  "properties": {
+    "id": {
+      "type": "integer",
+      "minimum": 1
+    },
+    "title": {
+      "type": "string",
+      "minLength": 1
+    },
+    "body": {
+      "type": "string",
+      "minLength": 1
+    },
+    "userId": {
+      "type": "integer",
+      "minimum": 1
+    }
+  },
+  "required": ["id", "title", "body", "userId"],
+  "additionalProperties": false
+}
+```
+
+**Key schema rules explained:**
+
+```json
+// "type" — what Java/JSON type the field must be
+"type": "integer"  → must be a whole number (no decimals)
+"type": "string"   → must be text
+"type": "boolean"  → must be true or false
+"type": "array"    → must be a list
+"type": "object"   → must be a nested JSON object
+"type": "number"   → integer or float (use for prices)
+"type": ["string", "null"]  → can be string OR null (nullable field)
+
+// "required" — fields that MUST exist in every response
+"required": ["id", "title"]  → test fails if id or title is missing
+
+// "additionalProperties" — allow extra fields in response?
+"additionalProperties": false   → fail if any field NOT in schema appears
+"additionalProperties": true    → allow extra fields (more lenient, usually better)
+
+// "minimum" / "maximum" — for numbers
+"minimum": 1        → value must be >= 1
+"maximum": 100      → value must be <= 100
+
+// "minLength" / "maxLength" — for strings
+"minLength": 1      → string must not be empty
+"maxLength": 255    → string must not exceed 255 chars
+
+// "pattern" — regex for strings
+"pattern": "^[a-z0-9+_.-]+@[a-z0-9.-]+$"  → must be valid email format
+
+// "enum" — only specific values allowed
+"enum": ["active", "inactive", "pending"]  → only these 3 values
+```
+
+---
+
+### Step 5 — Use in your test
+
+```java
+// Add this import at the top of your test class:
+import static io.restassured.module.jsv.JsonSchemaValidator.matchesJsonSchemaInClasspath;
+
+// Use in test:
+@Test
+public void getPostMatchesSchema() {
+    given()
+        .pathParam("id", 1)
+    .when()
+        .get(ApiConstants.POSTS_ENDPOINT + "/{id}")
+    .then()
+        .statusCode(200)
+        .body(matchesJsonSchemaInClasspath("schemas/post-schema.json"));
+        //                                  ↑ path RELATIVE to src/test/resources/
+}
+```
+
+**The path is always relative to `src/test/resources/`:**
+```java
+// File at: src/test/resources/schemas/post-schema.json
+matchesJsonSchemaInClasspath("schemas/post-schema.json")  ✅
+
+// File at: src/test/resources/post-schema.json
+matchesJsonSchemaInClasspath("post-schema.json")           ✅
+
+// File at: src/test/resources/schemas/users/user-schema.json
+matchesJsonSchemaInClasspath("schemas/users/user-schema.json")  ✅
+```
+
+---
+
+### Schema for ARRAY response (e.g. GET /posts returns array)
+
+```json
+{
+  "$schema": "http://json-schema.org/draft-04/schema#",
+  "type": "array",
+  "items": {
+    "type": "object",
+    "properties": {
+      "id":     { "type": "integer" },
+      "title":  { "type": "string"  },
+      "body":   { "type": "string"  },
+      "userId": { "type": "integer" }
+    },
+    "required": ["id", "title", "body", "userId"]
+  },
+  "minItems": 1
+}
+```
+
+```java
+// Validate array response against schema
+given()
+.when()
+    .get(ApiConstants.POSTS_ENDPOINT)
+.then()
+    .statusCode(200)
+    .body(matchesJsonSchemaInClasspath("schemas/posts-array-schema.json"));
+```
+
+---
+
+### Schema for NESTED object (e.g. user with address)
+
+```json
+{
+  "$schema": "http://json-schema.org/draft-04/schema#",
+  "type": "object",
+  "properties": {
+    "id":       { "type": "integer" },
+    "name":     { "type": "string"  },
+    "email":    { "type": "string"  },
+    "address": {
+      "type": "object",
+      "properties": {
+        "street":  { "type": "string" },
+        "city":    { "type": "string" },
+        "zipcode": { "type": "string" }
+      },
+      "required": ["street", "city", "zipcode"]
+    }
+  },
+  "required": ["id", "name", "email", "address"]
+}
+```
+
+---
+
+### How to GENERATE a schema from an existing response
+
+Instead of writing schema manually, use this approach:
+
+```java
+// Step 1: Print the response body
+@Test
+public void printResponseToCopySchema() {
+    given()
+        .pathParam("id", 1)
+    .when()
+        .get(ApiConstants.POSTS_ENDPOINT + "/{id}")
+    .then()
+        .statusCode(200)
+        .log().body();   // prints: { "id":1, "title":"...", "body":"...", "userId":1 }
+}
+
+// Step 2: Copy the JSON output
+// Step 3: Go to: https://www.jsonschema.net/
+// Step 4: Paste the JSON → click "Infer Schema"
+// Step 5: Copy the generated schema → paste into your .json file
+// Step 6: Adjust "required" and "additionalProperties" as needed
+```
+
+---
+
+### TROUBLESHOOTING — JSON Schema Failures
+
+---
+
+**Error 1: `java.io.FileNotFoundException: schemas/post-schema.json`**
+
+```
+io.restassured.internal.ValidatableResponseOptionsImpl$$EnhancerBySpringCGLIB
+Caused by: java.io.FileNotFoundException: schemas/post-schema.json
+```
+
+**Causes and fixes:**
+
+```
+Cause A: File is in wrong location
+  Check: src/test/resources/schemas/post-schema.json  ← must be HERE
+  Not:   src/main/resources/schemas/post-schema.json  ← WRONG folder
+  Not:   src/test/java/schemas/post-schema.json       ← WRONG folder
+
+Cause B: resources folder NOT marked as Test Resources Root
+  Fix: Right-click src/test/resources → Mark Directory As → Test Resources Root
+
+Cause C: Path string is wrong in the test
+  Check: matchesJsonSchemaInClasspath("schemas/post-schema.json")
+  The path starts AFTER src/test/resources/
+  File at resources/schemas/post-schema.json → use "schemas/post-schema.json"
+
+Cause D: File name has a typo
+  Check: post-schema.json vs post_schema.json (underscore vs hyphen)
+  Java file paths are case-sensitive on Linux/Mac but not on Windows
+  Use lowercase and hyphens to be safe
+```
+
+---
+
+**Error 2: `Schema validation failed` — Field type mismatch**
+
+```
+com.github.fge.jsonschema.core.exceptions.ProcessingException:
+  error: /properties/id: instance is not of type "string"
+  Found: "integer", Expected: "string"
+```
+
+**Fix:**
+```json
+// API returns: { "id": 1 }   ← id is an integer
+// Your schema says:
+"id": { "type": "string" }    ← WRONG — says string
+
+// Fix:
+"id": { "type": "integer" }   ← CORRECT — matches actual response
+```
+
+---
+
+**Error 3: `Schema validation failed` — Required field missing**
+
+```
+error: instance failed to match schema (missing required key(s): ["userId"])
+```
+
+**Fix:**
+```json
+// API response is: { "id": 1, "title": "...", "body": "..." }
+// Missing: userId
+
+// Option A: Remove userId from required list (if it's optional)
+"required": ["id", "title", "body"]   // removed "userId"
+
+// Option B: Fix your schema — userId should be nullable
+"userId": { "type": ["integer", "null"] }  // allows null value
+
+// Option C: Use a different API endpoint that includes userId
+// GET /posts/1 includes userId — GET /comments/1 might not
+```
+
+---
+
+**Error 4: `additionalProperties` rejects extra fields**
+
+```
+error: additional properties are not allowed ('newField' was unexpected)
+```
+
+**Fix:**
+```json
+// Change:
+"additionalProperties": false   // strict — fails if ANY extra field appears
+
+// To:
+"additionalProperties": true    // lenient — allows extra fields
+// OR just remove the additionalProperties line entirely
+```
+
+---
+
+**Error 5: `NoClassDefFoundError: JsonSchemaValidator`**
+
+```
+java.lang.NoClassDefFoundError: io/restassured/module/jsv/JsonSchemaValidator
+```
+
+**Fix:**
+```xml
+<!-- json-schema-validator dependency is MISSING from pom.xml -->
+<!-- Add this to pom.xml dependencies: -->
+<dependency>
+    <groupId>io.rest-assured</groupId>
+    <artifactId>json-schema-validator</artifactId>
+    <version>5.3.1</version>   <!-- MUST match rest-assured version -->
+    <scope>test</scope>
+</dependency>
+
+<!-- Then refresh Maven in IntelliJ: Maven panel → ↻ button -->
+```
+
+---
+
+**Error 6: Schema works locally, fails in CI (`FileNotFoundException`)**
+
+```
+// Local: PASS
+// GitHub Actions / Jenkins: java.io.FileNotFoundException: schemas/post-schema.json
+```
+
+**Fix:**
+```
+Root cause: resources folder not being copied to target/ in CI
+
+Fix in pom.xml — add testResources configuration:
+```
+
+```xml
+<build>
+    <testResources>
+        <testResource>
+            <!-- Tell Maven to include this folder in the classpath -->
+            <directory>src/test/resources</directory>
+        </testResource>
+    </testResources>
+    <plugins>
+        ...
+    </plugins>
+</build>
+```
+
+```bash
+# Verify in CI: add this command to check the schema was copied
+ls target/test-classes/schemas/
+# Should show: post-schema.json
+# If missing → resources aren't being copied → add testResources to pom.xml
+```
+
+---
+
+### IntelliJ vs VS Code — JSON Schema Classpath Handling
+
+| | IntelliJ IDEA | VS Code |
+|--|--------------|---------|
+| Mark resources folder | Right-click → **Mark Directory As → Test Resources Root** | Edit `.classpath` file OR `settings.json` |
+| Auto-copies to target/ | Yes — when "Mark Directory" is set correctly | Yes — via Maven extension if configured |
+| Syntax highlighting in .json | Built-in | Install "JSON" extension |
+| Schema file autocomplete | Yes — types field names | Partial |
+| Run single schema test | Right-click → Run | Terminal: `mvn test -Dtest=...` |
+| Common failure cause | Folder not marked as Test Resources Root | `.classpath` not updated after adding folder |
+
+**In VS Code — how to make it work:**
+
+```
+1. Install extension: "Extension Pack for Java" (mandatory for Java in VS Code)
+
+2. Open your project (the folder with pom.xml)
+
+3. VS Code reads pom.xml automatically — Maven resources folders are included
+
+4. The src/test/resources folder is automatically on the classpath via Maven
+
+5. Run tests via terminal (VS Code has no right-click TestNG runner):
+   mvn test -Dtest=GetTests#getPostMatchesSchema
+
+6. If schema not found in VS Code:
+   - Open pom.xml
+   - VS Code shows "Java Projects" in the Explorer
+   - Check that "src/test/resources" appears under "Source Paths"
+   - If not: Ctrl+Shift+P → "Java: Configure Classpath" → add the folder
+```
+
+**Recommendation:** For JSON Schema validation with RestAssured, use **IntelliJ**. The classpath setup is visual (right-click → mark), the error messages are clearer, and the Maven integration works seamlessly.
+
+---
+
+### Complete Working Test With Schema — Copy/Paste Ready
+
+```java
+package tests;
+
+import base.BaseTest;
+import org.testng.annotations.Test;
+import utils.ApiConstants;
+
+// This import is required — without it, matchesJsonSchemaInClasspath doesn't exist
+import static io.restassured.module.jsv.JsonSchemaValidator.matchesJsonSchemaInClasspath;
+import static io.restassured.RestAssured.*;
+import static org.hamcrest.Matchers.*;
+
+public class SchemaTests extends BaseTest {
+
+    @Test(description = "GET single post matches JSON schema — validates structure")
+    public void getPostMatchesSchema() {
+        given()
+            .pathParam("id", 1)
+        .when()
+            .get(ApiConstants.POSTS_ENDPOINT + "/{id}")
+        .then()
+            .statusCode(200)
+            .body(matchesJsonSchemaInClasspath("schemas/post-schema.json"));
+    }
+
+    @Test(description = "GET all posts matches array schema")
+    public void getAllPostsMatchesSchema() {
+        given()
+        .when()
+            .get(ApiConstants.POSTS_ENDPOINT)
+        .then()
+            .statusCode(200)
+            .body(matchesJsonSchemaInClasspath("schemas/posts-array-schema.json"));
+    }
+
+    @Test(description = "POST response matches schema")
+    public void createPostMatchesSchema() {
+        String body = "{ \"title\": \"Test\", \"body\": \"Content\", \"userId\": 1 }";
+        given()
+            .spec(requestSpec)
+            .body(body)
+        .when()
+            .post(ApiConstants.POSTS_ENDPOINT)
+        .then()
+            .statusCode(201)
+            .body(matchesJsonSchemaInClasspath("schemas/post-schema.json"));
+    }
+}
+```
+
+---
+
+### Full Folder Structure — Schema Files Location
+
+```
+src/
+└── test/
+    ├── java/
+    │   ├── base/BaseTest.java
+    │   ├── tests/
+    │   │   ├── GetTests.java
+    │   │   ├── PostTests.java
+    │   │   └── SchemaTests.java      ← schema validation tests
+    │   └── utils/ApiConstants.java
+    └── resources/                    ← MARK THIS AS TEST RESOURCES ROOT
+        ├── testng.xml
+        └── schemas/                  ← schema files go here
+            ├── post-schema.json      ← for single post response
+            ├── posts-array-schema.json ← for array of posts
+            └── user-schema.json      ← for user responses
+```
+
+**In code, reference the file relative to the `resources/` folder:**
+```java
+matchesJsonSchemaInClasspath("schemas/post-schema.json")
+//                            ↑ this path starts after src/test/resources/
+```
+
+---
+
+*Setup Guide — IntelliJ IDEA + RestAssured + TestNG | JSON Schema Validation | Classpath Setup*
