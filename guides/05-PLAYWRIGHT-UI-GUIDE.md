@@ -2442,4 +2442,63 @@ The principle: write tests the way a human describes the element ("the Submit bu
 
 ---
 
+---
+
+**Q: How do you intercept and mock API responses in Playwright UI tests?**
+
+**A:** `page.route()` intercepts network requests during a UI test. This lets you test UI behaviour when the API is slow, unavailable, or returns specific data you control.
+
+```typescript
+// MOCK a response — replace real API data with test data
+await page.route('/api/users', async route => {
+    await route.fulfill({
+        status: 200,
+        contentType: 'application/json',
+        body: JSON.stringify([
+            { id: 1, name: 'Test User', email: 'test@example.com' }
+        ])
+    });
+});
+await page.goto('/users');
+// UI shows "Test User" — guaranteed, no matter what the real API returns
+
+// SIMULATE server error — test how UI handles 500
+await page.route('/api/products', async route => {
+    await route.fulfill({ status: 500, body: 'Internal Server Error' });
+});
+await page.goto('/products');
+await expect(page.getByText('Something went wrong')).toBeVisible();
+// Verify the error state displays correctly
+
+// SIMULATE slow response — test loading spinner appears
+await page.route('/api/slow-data', async route => {
+    await new Promise(resolve => setTimeout(resolve, 3000));  // 3 second delay
+    await route.fulfill({ status: 200, body: JSON.stringify({ data: [] }) });
+});
+await page.goto('/dashboard');
+await expect(page.getByTestId('loading-spinner')).toBeVisible(); // spinner shows during delay
+
+// BLOCK analytics trackers — speed up tests
+await page.route('**/google-analytics.com/**', route => route.abort());
+await page.route('**/hotjar.com/**', route => route.abort());
+
+// MODIFY a real response — change one field and let rest through
+await page.route('/api/users/1', async route => {
+    const response = await route.fetch();          // get real response
+    const body = await response.json();
+    body.role = 'admin';                           // change one field
+    await route.fulfill({ response, body: JSON.stringify(body) });
+});
+
+// SPY on a request — don't change it, just capture it
+const requestPromise = page.waitForRequest('/api/checkout');
+await page.click('#buyNowBtn');
+const request = await requestPromise;
+const requestBody = request.postDataJSON();
+expect(requestBody.items).toHaveLength(3);
+expect(requestBody.total).toBeGreaterThan(0);
+```
+
+**Why this matters:** Testing UI error states, loading states, and edge cases would require the backend to deliberately fail — page.route() removes that dependency. Your UI tests are independent of the API's actual data.
+
 *End of File 05 — Playwright UI Testing Complete Interview Q&A Guide*
