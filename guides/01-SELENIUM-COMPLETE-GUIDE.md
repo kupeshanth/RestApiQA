@@ -1768,5 +1768,108 @@ public void goToPageWithAuth() {
 
 ---
 
+---
+
+**Q: What is Selenium Grid and why do you use it?**
+
+**A:** Selenium Grid distributes test execution across multiple machines simultaneously. A Hub receives test commands and delegates them to registered Nodes (machines with browsers).
+
+```
+Architecture:
+  Your Test Code → Hub (central server) → Node 1 (Chrome on Windows)
+                                        → Node 2 (Firefox on Mac)
+                                        → Node 3 (Safari on Mac)
+```
+
+```java
+// Run tests against Selenium Grid instead of local browser
+// Only ONE change needed — swap ChromeDriver for RemoteWebDriver
+
+// WITHOUT Grid (local):
+WebDriver driver = new ChromeDriver();
+
+// WITH Grid (remote):
+ChromeOptions options = new ChromeOptions();
+URL gridUrl = new URL("http://grid-hub-ip:4444");
+WebDriver driver = new RemoteWebDriver(gridUrl, options);
+// Everything else in your tests stays identical
+
+// For Selenium Grid 4 (simpler — no Hub/Node, just Grid):
+URL gridUrl = new URL("http://localhost:4444");
+WebDriver driver = new RemoteWebDriver(gridUrl, new ChromeOptions());
+```
+
+Start Grid locally:
+```bash
+# Download selenium-server.jar then:
+java -jar selenium-server.jar standalone   # Grid 4 — one command
+# Tests connect to: http://localhost:4444
+```
+
+Cloud alternatives (no setup needed): BrowserStack, Sauce Labs, LambdaTest — same RemoteWebDriver code, just different URL + credentials.
+
+---
+
+**Q: What is Shadow DOM and how do you interact with it in Selenium?**
+
+**A:** Shadow DOM is a web standard that lets components encapsulate their internal DOM. Regular `driver.findElement()` cannot penetrate Shadow DOM — elements inside it are invisible to standard locators.
+
+```java
+// Check if element is in Shadow DOM: inspect it in browser DevTools
+// If you see #shadow-root in the element tree → Shadow DOM
+
+// Method 1: JavaScript to pierce the shadow boundary
+WebElement shadowHost = driver.findElement(By.cssSelector("my-component"));
+// Execute JS to get the shadow root, then find element inside it
+WebElement shadowRoot = (WebElement) ((JavascriptExecutor) driver)
+    .executeScript("return arguments[0].shadowRoot", shadowHost);
+WebElement button = shadowRoot.findElement(By.cssSelector("button.submit"));
+button.click();
+
+// Method 2: Selenium 4 native Shadow DOM support (Java 4.x+)
+WebElement shadowHost = driver.findElement(By.cssSelector("my-component"));
+SearchContext shadowRoot = shadowHost.getShadowRoot();
+WebElement button = shadowRoot.findElement(By.cssSelector("button.submit"));
+button.click();
+
+// Multi-level Shadow DOM (shadow inside shadow)
+SearchContext outerShadow = driver.findElement(By.id("outer")).getShadowRoot();
+SearchContext innerShadow = outerShadow.findElement(By.id("inner")).getShadowRoot();
+innerShadow.findElement(By.id("target")).click();
+```
+
+---
+
+**Q: What new features did Selenium 4 introduce?**
+
+**A:** Key Selenium 4 improvements over Selenium 3:
+
+```java
+// 1. Relative Locators — find elements by position relative to other elements
+WebElement passwordField = driver.findElement(
+    RelativeLocator.with(By.tagName("input")).below(By.id("username"))
+);
+// Other relative locators: above(), leftOf(), rightOf(), near()
+
+// 2. Native Shadow DOM support (without JavaScript)
+SearchContext shadow = driver.findElement(By.id("host")).getShadowRoot();
+
+// 3. Chrome DevTools Protocol (CDP) — directly control browser
+((HasDevTools) driver).getDevTools().createSession();
+// Enables: network throttling, console listener, geolocation mock, etc.
+
+// 4. Selenium Manager — auto-downloads drivers (like WebDriverManager built-in)
+// Just instantiate ChromeDriver() — no WebDriverManager.setup() needed
+WebDriver driver = new ChromeDriver();   // Selenium 4 handles driver automatically
+
+// 5. New window/tab API
+driver.switchTo().newWindow(WindowType.TAB);      // open new tab
+driver.switchTo().newWindow(WindowType.WINDOW);   // open new window
+
+// 6. Improved Screenshots — element-level screenshot
+WebElement element = driver.findElement(By.id("chart"));
+File shot = element.getScreenshotAs(OutputType.FILE);  // screenshot of just this element
+```
+
 *Last updated: Senior QA Interview Preparation*
 *GitHub: https://github.com/kupeshanth/RestApiQA/guides/01-SELENIUM-COMPLETE-GUIDE.md*
