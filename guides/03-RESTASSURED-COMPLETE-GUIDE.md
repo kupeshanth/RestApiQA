@@ -2053,3 +2053,69 @@ Query param: /posts?userId=1 → filters, sorts, or paginates results
 4. Check for race conditions if running in parallel
 5. Check for test data conflicts between parallel tests
 ```
+
+---
+
+**Q: How do you test a file upload API endpoint using RestAssured?**
+
+**A:** Use `multiPart()` for multipart/form-data file uploads. This is how APIs that accept file uploads (profile pictures, document uploads) must be tested.
+
+```java
+import java.io.File;
+
+// Method 1: Upload a file from disk
+@Test
+public void uploadProfilePhoto() {
+    File imageFile = new File("src/test/resources/files/test-image.jpg");
+
+    given()
+        .header("Authorization", "Bearer " + ApiConstants.AUTH_TOKEN)
+        .multiPart("file", imageFile, "image/jpeg")   // field name, file, MIME type
+        .multiPart("description", "Profile photo")     // additional form field
+    .when()
+        .post("/users/1/photo")
+    .then()
+        .statusCode(201)
+        .body("url", notNullValue())
+        .body("url", startsWith("https://"));
+}
+
+// Method 2: Upload with custom field name and filename
+given()
+    .multiPart(new MultiPartSpecBuilder(imageFile)
+        .controlName("avatar")           // form field name
+        .fileName("my-photo.jpg")        // custom filename sent to server
+        .mimeType("image/jpeg")
+        .build())
+.when()
+    .post("/upload")
+.then()
+    .statusCode(200);
+
+// Method 3: Upload bytes (useful when file comes from network/memory)
+byte[] fileBytes = Files.readAllBytes(Path.of("src/test/resources/files/doc.pdf"));
+given()
+    .multiPart("document", "report.pdf", fileBytes, "application/pdf")
+.when()
+    .post("/documents")
+.then()
+    .statusCode(201);
+
+// Method 4: Upload multiple files
+given()
+    .multiPart("files", new File("file1.jpg"), "image/jpeg")
+    .multiPart("files", new File("file2.jpg"), "image/jpeg")
+.when()
+    .post("/photos/bulk")
+.then()
+    .statusCode(201)
+    .body("uploaded", equalTo(2));
+```
+
+Common assertion after upload:
+```java
+.body("fileSize", lessThan(10485760))           // size < 10MB
+.body("mimeType", equalTo("image/jpeg"))
+.body("filename", not(emptyString()))
+.body("downloadUrl", matchesPattern("https://.*\\.jpg"))
+```
