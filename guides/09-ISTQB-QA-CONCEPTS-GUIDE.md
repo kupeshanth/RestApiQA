@@ -1706,4 +1706,73 @@ The key is combining both: scripted testing for repeatability and coverage measu
 
 ---
 
+---
+
+**Q: What is pairwise testing (all-pairs testing)? When do you use it?**
+
+**A:** Pairwise testing (also called all-pairs) reduces the number of test cases needed to cover all combinations of parameters. Instead of testing every combination (which grows exponentially), it tests every PAIR of parameter values at least once.
+
+```
+Problem: You have 5 configuration options, each with 2-4 values
+  Browser: Chrome, Firefox, Safari (3 values)
+  OS:      Windows, Mac, Linux     (3 values)
+  Role:    Admin, User, Guest      (3 values)
+  Language: EN, FR, DE, ES        (4 values)
+
+Full combination testing: 3 × 3 × 3 × 4 = 108 test cases
+
+Pairwise testing: ~16 test cases (covers every PAIR at least once)
+
+Why it works: Most bugs are caused by the INTERACTION of 2 parameters.
+              Pairwise covers all 2-parameter interactions with far fewer tests.
+
+Tools to generate pairwise test cases:
+  - PICT (Microsoft Pairwise Independent Combinatorial Testing) — free tool
+  - allpairsGenerator — online tools
+  - TestNG DataProvider can implement the generated cases
+```
+
+**Example — Login form with 3 parameters:**
+```
+Username valid/invalid × Password valid/invalid × Remember Me on/off
+Full: 2 × 2 × 2 = 8 test cases
+Pairwise: 4 test cases (each pair covered at least once)
+
+| Username | Password | Remember Me |
+|----------|----------|-------------|
+| valid    | valid    | on          |  covers: valid-valid, valid-on, valid-on
+| valid    | invalid  | off         |  covers: valid-invalid, valid-off, invalid-off
+| invalid  | valid    | off         |  covers: invalid-valid, invalid-off, valid-off
+| invalid  | invalid  | on          |  covers: invalid-invalid, invalid-on, invalid-on
+
+All 6 unique pairs are covered in 4 tests instead of 8
+```
+
+**Interview answer:** "I use pairwise testing when I have multiple configuration parameters and testing every combination is impractical. It's efficient because research shows most defects are triggered by the interaction of 2 parameters — pairwise guarantees all 2-way interactions are covered."
+
+---
+
+**Q: What is cause-effect graphing in test design?**
+
+**A:** Cause-Effect Graphing is an ISTQB test design technique that systematically maps inputs (causes) to outputs (effects) using logical relationships (AND, OR, NOT) to derive a complete set of test cases.
+
+```
+Process:
+1. Identify causes (inputs/conditions): C1=username valid, C2=password valid, C3=account active
+2. Identify effects (outputs): E1=login success, E2=error message, E3=account locked
+3. Draw logical relationships:
+   C1 AND C2 AND C3 → E1 (login success)
+   C1 AND NOT C2     → E2 (wrong password error)
+   C2 AND NOT C1     → E2 (wrong username error)
+   3 wrong attempts  → E3 (account locked)
+4. Create a decision table from the graph
+5. Each column in the table = one test case
+
+Benefit: Guarantees systematic coverage of all cause-effect combinations.
+Compared to decision tables: Cause-effect graphing handles complex logical 
+relationships (nested AND/OR) that decision tables struggle with.
+```
+
+**When to use:** When requirements describe multiple conditions that combine in complex ways — e.g. "a user can proceed only if they are verified AND have an active subscription AND have not exceeded their quota."
+
 *Guide complete — covers SDLC, STLC, test levels, test pyramid, test design techniques (EP, BVA, decision tables, state transition, use case), code coverage, defect lifecycle, severity vs priority, risk-based testing, test planning, test metrics, agile testing, performance testing types, and 10 interview questions with full answers.*
