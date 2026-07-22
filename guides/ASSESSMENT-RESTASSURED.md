@@ -1041,4 +1041,391 @@ Also verify: class file is in `src/test/java/tests/GetTests.java` (not `src/main
 
 ---
 
-*Assessment Guide — RestAssured API Testing | Java + TestNG*
+---
+
+## MORE REAL-TIME FAILURES — Advanced Scenarios
+
+---
+
+### FAILURE 11: `415 Unsupported Media Type`
+```
+Expected status code <201> but was <415>
+```
+**Cause:** You're not setting `Content-Type: application/json` on the request.
+
+**Fix:**
+```java
+// In requestSpec — make sure this line exists:
+.setContentType(ContentType.JSON)
+
+// Or per-request:
+given()
+    .contentType(ContentType.JSON)   // ← this line is mandatory for POST/PUT
+    .body(requestBody)
+.when().post("/endpoint")
+```
+
+---
+
+### FAILURE 12: `SSL Certificate Error (HTTPS)`
+```
+javax.net.ssl.SSLHandshakeException: PKIX path building failed
+sun.security.validator.ValidatorException: PKIX path building failed
+```
+**Cause:** The API uses a self-signed certificate (common in test/staging environments).
+
+**Fix:**
+```java
+// In BaseTest setUp() — disable SSL validation for test environments
+RestAssured.useRelaxedHTTPSValidation();
+
+// Or per-request:
+given().relaxedHTTPSValidation().when().get("/endpoint")
+
+// NEVER disable SSL in production — only for test environments
+```
+
+---
+
+### FAILURE 13: `Response Body is HTML, Not JSON`
+```
+com.fasterxml.jackson.core.JsonParseException: Unexpected character '<'
+groovy.lang.GroovyRuntimeException: Unable to process JSON
+```
+**Cause:** The server returned an HTML error page instead of JSON. This happens when the URL is wrong (redirected to login page) or the server crashed.
+
+**Debug:**
+```java
+// Print the raw response FIRST — see what actually came back
+Response response = given().when().get("/endpoint").then().extract().response();
+System.out.println("Status: " + response.statusCode());
+System.out.println("Body: " + response.body().asString());
+// You'll see something like:
+// <html><body>404 Not Found</body></html>
+// Now you know the URL is wrong or auth is missing
+```
+
+---
+
+### FAILURE 14: `429 Too Many Requests — Rate Limit Hit`
+```
+Expected status code <200> but was <429>
+```
+**Cause:** You sent too many requests too fast. Common with public APIs.
+
+**Fix:**
+```java
+// Option 1: Add a small pause between tests in testng.xml
+<suite name="Suite" verbose="1">
+    <test name="Tests" time-out="60000">
+        <!-- gap-between-suites is not standard but add Thread.sleep in @BeforeMethod -->
+    </test>
+</suite>
+
+// Option 2: Add pause in @BeforeMethod
+@BeforeMethod
+public void waitBetweenTests() throws InterruptedException {
+    Thread.sleep(500);   // 500ms between each test
+}
+
+// Option 3: Use anyOf to handle 429 gracefully
+.statusCode(anyOf(equalTo(200), equalTo(429)));
+```
+
+---
+
+### FAILURE 15: `ClassCastException on extract().path()`
+```
+java.lang.ClassCastException: class java.lang.Integer cannot be cast to class java.lang.String
+```
+**Cause:** Trying to extract an integer field as a String (or vice versa).
+
+**Fix:**
+```java
+// WRONG — id is an integer, can't assign to String
+String id = given().when().get("/posts/1").then().extract().path("id");
+
+// CORRECT — match the Java type to the JSON type
+int    id    = given().when().get("/posts/1").then().extract().path("id");
+String title = given().when().get("/posts/1").then().extract().path("title");
+
+// Or use explicit cast
+Integer id = given().when().get("/posts/1").then()
+    .extract().<Integer>path("id");
+```
+
+---
+
+### FAILURE 16: `GPath expression fails on null field`
+```
+java.lang.NullPointerException
+  at io.restassured.internal.path.json.JSONAssertion
+```
+**Cause:** You're asserting a nested field that is null in the response.
+
+**Debug + Fix:**
+```java
+// Print full response first
+given().when().get("/users/1").then().log().body().statusCode(200);
+
+// Check if field can be null
+// WRONG: assumes user.address is never null
+.body("user.address.city", equalTo("London"))
+
+// CORRECT: assert address exists before checking city
+.body("user.address", notNullValue())
+.body("user.address.city", anyOf(nullValue(), equalTo("London")))
+```
+
+---
+
+### FAILURE 17: `Tests pass in local Maven but fail in IntelliJ`
+```
+Test passes via: mvn test
+Test fails via: Right-click → Run in IntelliJ
+Error: testng.xml not found
+```
+**Cause:** IntelliJ runs the class directly, not via Maven Surefire which reads testng.xml.
+
+**Fix:**
+```
+In IntelliJ:
+  Run → Edit Configurations → TestNG
+  Change "Suite" to point to: src/test/resources/testng.xml
+  OR
+  Always run via terminal: mvn test
+  Never right-click → Run for assessment demos
+```
+
+---
+
+### FAILURE 18: `Floating point assertion fails`
+```
+Expected: <9.99>
+  Actual: <9.990000247955322>
+```
+**Cause:** Float/double precision mismatch between JSON and Java.
+
+**Fix:**
+```java
+// WRONG — exact float comparison
+.body("price", equalTo(9.99))
+
+// CORRECT — use float literal
+.body("price", equalTo(9.99f))
+
+// BETTER — use closeTo matcher for floating point
+.body("price", closeTo(9.99, 0.01))   // within 0.01 of 9.99
+
+// OR extract and assert with delta
+double price = given().when().get("/products/1").then().extract().path("price");
+Assert.assertEquals(price, 9.99, 0.001);  // 3rd arg = delta
+```
+
+---
+
+### FAILURE 19: `Array assertion fails — wrong order`
+```
+Expected: <[3, 1, 2]>
+  Actual: <[1, 2, 3]>
+```
+**Cause:** API returned array in different order than expected.
+
+**Fix:**
+```java
+// WRONG — asserts exact order
+.body("ids", equalTo(Arrays.asList(3, 1, 2)))
+
+// CORRECT — asserts contents regardless of order
+.body("ids", containsInAnyOrder(1, 2, 3))
+
+// ALSO CORRECT — just check it contains specific item
+.body("ids", hasItem(1))
+
+// Check size only (don't care about content)
+.body("ids", hasSize(3))
+```
+
+---
+
+### FAILURE 20: `Token expired during test run`
+```
+Expected status code <200> but was <401>
+// Only happens midway through a long test run, not at start
+```
+**Cause:** Auth token expires while tests are running (common with short-lived JWTs).
+
+**Fix:**
+```java
+// In BaseTest — fetch fresh token before EACH test class
+@BeforeClass
+public void setUp() {
+    String freshToken = fetchToken();   // always get new token
+    requestSpec = new RequestSpecBuilder()
+        .addHeader("Authorization", "Bearer " + freshToken)
+        .build();
+}
+
+private String fetchToken() {
+    return given()
+        .contentType(ContentType.JSON)
+        .body("{ \"username\": \"admin\", \"password\": \"secret\" }")
+    .when()
+        .post("/auth/login")
+    .then()
+        .statusCode(200)
+        .extract().path("token");
+}
+```
+
+---
+
+### FAILURE 21: `Content-Length mismatch / Encoding issue`
+```
+Expected: <"Sao Paulo">
+  Actual: <"São Paulo">
+```
+**Cause:** Special characters (accents, non-ASCII) encoded differently.
+
+**Fix:**
+```java
+// In BaseTest requestSpec — add charset
+.setContentType("application/json; charset=UTF-8")
+
+// Or in pom.xml properties:
+<project.build.sourceEncoding>UTF-8</project.build.sourceEncoding>
+
+// Use containsString instead of exact match for international text
+.body("city", containsString("Paulo"))  // partial match avoids encoding issues
+```
+
+---
+
+### FAILURE 22: `Test order dependency — test B depends on test A's data`
+```
+// Test A creates a user, gets ID 101
+// Test B tries to GET user 101 but the API doesn't persist it
+// → Test B fails with 404
+```
+**Cause:** JSONPlaceholder and many test APIs simulate creation but don't persist data.
+
+**Fix:**
+```java
+// For real APIs that DO persist: chain tests within ONE test method
+@Test
+public void createThenVerifyUser() {
+    // Step 1: create
+    int newId = given().spec(requestSpec)
+        .body("{ \"name\": \"Test\" }")
+        .when().post("/users")
+        .then().statusCode(201).extract().path("id");
+
+    // Step 2: verify (in SAME test, guaranteed sequential)
+    given().pathParam("id", newId)
+        .when().get("/users/{id}")
+        .then().statusCode(200).body("id", equalTo(newId));
+}
+```
+
+---
+
+### FAILURE 23: `mvn test — BUILD SUCCESS but 0 tests run`
+```
+[INFO] Tests run: 0, Failures: 0, Errors: 0, Skipped: 0
+[INFO] BUILD SUCCESS
+```
+**Cause 1:** Test files are in `src/main/java/` instead of `src/test/java/`.
+**Cause 2:** testng.xml class name doesn't match actual class package.
+**Cause 3:** `@Test` annotation is from wrong package.
+
+**Fix:**
+```bash
+# Check 1: verify test files location
+ls src/test/java/tests/   # should list your .java files
+
+# Check 2: verify annotation import
+# WRONG:  import org.junit.Test;
+# CORRECT: import org.testng.annotations.Test;
+
+# Check 3: compile test classes and check for errors
+mvn test-compile -e   # shows detailed errors
+```
+
+---
+
+### FAILURE 24: `Cannot call .spec(requestSpec) — NullPointerException`
+```
+java.lang.NullPointerException at tests.GetTests.getAllPosts(GetTests.java:25)
+// at the .spec(requestSpec) line
+```
+**Cause:** `requestSpec` is null because `setUp()` in BaseTest didn't run, or test class doesn't extend BaseTest.
+
+**Fix:**
+```java
+// Check 1: class must extend BaseTest
+public class GetTests extends BaseTest {   // ← must have 'extends BaseTest'
+    @Test
+    public void getAllPosts() {
+        given().spec(requestSpec)...   // requestSpec available from BaseTest
+    }
+}
+
+// Check 2: @BeforeClass must be public
+@BeforeClass
+public void setUp() {   // ← must be public, not private
+    requestSpec = new RequestSpecBuilder()...
+}
+```
+
+---
+
+### FAILURE 25: `Response time assertion fails in CI`
+```
+Expected: response time less than <3000L>
+  Actual: response time was <4521L>
+```
+**Cause:** CI machines are slower. 3000ms is too tight for CI.
+
+**Fix:**
+```java
+// In responseSpec — use different timeout for CI vs local
+int timeout = System.getenv("CI") != null ? 10000 : 3000;
+
+responseSpec = new ResponseSpecBuilder()
+    .expectResponseTime(lessThan((long) timeout))
+    .build();
+
+// Or remove response time from responseSpec entirely
+// and only add it to tests where SLA matters
+```
+
+---
+
+## QUICK DEBUGGING CHECKLIST
+
+When a test fails, check these in order:
+
+```
+1. Print full response:
+   given().when().get("/endpoint").then().log().all();
+
+2. Print just the body:
+   Response r = given().when().get("/endpoint").then().extract().response();
+   System.out.println(r.asPrettyString());
+
+3. Print status code:
+   System.out.println("Status: " + response.statusCode());
+
+4. Print all headers:
+   System.out.println("Headers: " + response.headers());
+
+5. Check URL is correct:
+   System.out.println("URL: " + RestAssured.baseURI + "/endpoint");
+
+6. Test just with Postman first — if it fails there too, it's the API
+   If it passes in Postman but fails in code → it's your code
+```
+
+---
+
+*Assessment Guide — RestAssured API Testing | Java + TestNG | 25 Real Failures + Fixes*

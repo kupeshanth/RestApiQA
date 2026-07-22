@@ -641,4 +641,453 @@ Fix: Add to playwright.config.ts:
 
 ---
 
-*Assessment Guide — Playwright API Testing | TypeScript*
+---
+
+## MORE REAL-TIME FAILURES — Advanced Scenarios
+
+---
+
+### FAILURE 8: `SSL Certificate Error`
+```
+Error: request to https://staging-api.com failed, reason: certificate has expired
+Error: unable to verify the first certificate
+```
+**Cause:** Staging/test environments often use self-signed SSL certificates.
+
+**Fix:**
+```typescript
+// In playwright.config.ts — ignore SSL errors for test environments
+export default defineConfig({
+  use: {
+    baseURL: 'https://staging-api.com',
+    ignoreHTTPSErrors: true,   // ← add this
+  },
+});
+
+// Or per-request:
+const response = await request.get('/endpoint', {
+  ignoreHTTPSErrors: true
+});
+```
+
+---
+
+### FAILURE 9: `TypeError: Cannot read properties of undefined (reading 'id')`
+```
+TypeError: Cannot read properties of undefined (reading 'id')
+  at tests/api/posts.spec.ts:45
+```
+**Cause:** The response JSON structure is different from what you assumed. `body.id` doesn't exist.
+
+**Debug:**
+```typescript
+const response = await request.post(ENDPOINTS.users, { data: newUser });
+const body = await response.json();
+
+// Print EVERYTHING first
+console.log('Status:', response.status());
+console.log('Full body:', JSON.stringify(body, null, 2));
+
+// Now match your code to the actual structure:
+// If response is: { "data": { "id": 101 } }
+// Then: body.data.id  — NOT body.id
+```
+
+---
+
+### FAILURE 10: `expect(response.status()).toBe(200) — received 302`
+```
+expect(received).toBe(expected)
+Expected: 200
+Received: 302
+```
+**Cause:** The API redirected you (302 Redirect). Playwright doesn't follow redirects by default for API tests in some cases.
+
+**Fix:**
+```typescript
+// Option 1: follow redirects manually
+const response = await request.get('/endpoint', {
+  maxRedirects: 5   // follow up to 5 redirects
+});
+
+// Option 2: assert the redirect itself
+expect(response.status()).toBe(302);
+expect(response.headers()['location']).toContain('/new-url');
+
+// Option 3: use the redirect URL directly
+```
+
+---
+
+### FAILURE 11: `Promise — async/await missing`
+```
+TypeError: response.json is not a function
+// or
+Pending Promise: [object Promise]
+```
+**Cause:** Forgot `await` before an async call.
+
+**Fix:**
+```typescript
+// WRONG — missing await
+test('test', async ({ request }) => {
+  const response = request.get('/posts');      // ← missing await
+  const body = response.json();               // ← missing await
+  expect(body.id).toBe(1);
+});
+
+// CORRECT
+test('test', async ({ request }) => {
+  const response = await request.get('/posts');    // ← await
+  const body = await response.json();              // ← await
+  expect(body.id).toBe(1);
+});
+```
+**Rule:** Every line that calls a Playwright method needs `await`.
+
+---
+
+### FAILURE 12: `Could not resolve host`
+```
+Error: getaddrinfo ENOTFOUND api.company.com
+Error: connect ECONNREFUSED 127.0.0.1:3000
+```
+**Cause:** Wrong URL, typo in domain, server not running, or VPN required.
+
+**Debug:**
+```typescript
+// Step 1: print what URL you're actually calling
+console.log('baseURL:', process.env.BASE_URL || 'https://reqres.in');
+
+// Step 2: open the URL in browser — does it load?
+// Step 3: check for typos: 'https' not 'http', no trailing slash
+
+// Step 4: test with curl
+// curl https://reqres.in/api/users
+// if curl fails → it's a network/VPN issue
+// if curl works → it's your code
+
+// Step 5: check playwright.config.ts baseURL
+// Must NOT have trailing slash: 'https://reqres.in' ✅
+// WRONG: 'https://reqres.in/'  ❌
+```
+
+---
+
+### FAILURE 13: `Rate limiting — 429 during tests`
+```
+expect(received).toBe(expected)
+Expected: 200
+Received: 429
+```
+**Cause:** Too many requests sent too fast to a public API.
+
+**Fix:**
+```typescript
+// Option 1: Add delay between tests
+test.beforeEach(async () => {
+  await new Promise(resolve => setTimeout(resolve, 500));  // 500ms pause
+});
+
+// Option 2: assert 429 is handled correctly
+test('rate limit is enforced', async ({ request }) => {
+  let responses = [];
+  for (let i = 0; i < 20; i++) {
+    const r = await request.get(ENDPOINTS.users);
+    responses.push(r.status());
+  }
+  expect(responses).toContain(429);
+});
+
+// Option 3: use anyOf to not fail on rate limits
+expect([200, 429]).toContain(response.status());
+```
+
+---
+
+### FAILURE 14: `Token issues — 401 after first few tests`
+```
+// First 3 tests: 200 OK
+// Tests 4+: 401 Unauthorized
+```
+**Cause:** Token expired mid-run, or token was only fetched once and is short-lived.
+
+**Fix:**
+```typescript
+// WRONG: token fetched once in describe — might expire
+test.describe('authenticated', () => {
+  let token: string;
+
+  test.beforeAll(async ({ request }) => {
+    const r = await request.post('/auth/login', {
+      data: { email: 'user@test.com', password: 'pass' }
+    });
+    token = (await r.json()).token;
+    // ← if tests take 10 minutes and token lives 5 min → later tests fail
+  });
+});
+
+// CORRECT: fetch fresh token before EACH test (safer)
+test.beforeEach(async ({ request }) => {
+  const r = await request.post('/auth/login', {
+    data: { email: 'user@test.com', password: 'pass' }
+  });
+  const token = (await r.json()).token;
+  // Use token in this specific test
+});
+
+// OR: add token to config so it applies globally
+// playwright.config.ts:
+extraHTTPHeaders: {
+  'Authorization': `Bearer ${process.env.API_TOKEN}`,
+}
+// Set env var: API_TOKEN=mytoken npx playwright test
+```
+
+---
+
+### FAILURE 15: `Assertion on array fails — wrong order`
+```
+expect(received).toEqual(expected)
+Expected: [1, 2, 3]
+Received: [3, 1, 2]
+```
+**Cause:** API returned array in different order.
+
+**Fix:**
+```typescript
+// WRONG — exact order assertion
+expect(body.ids).toEqual([1, 2, 3]);
+
+// CORRECT — sort before comparing
+expect(body.ids.sort()).toEqual([1, 2, 3].sort());
+
+// ALSO CORRECT — check contains, not exact match
+expect(body.ids).toContain(1);
+expect(body.ids.length).toBe(3);
+
+// Check each item matches a structure
+body.data.forEach((user: any) => {
+  expect(user).toHaveProperty('id');
+  expect(user).toHaveProperty('email');
+});
+```
+
+---
+
+### FAILURE 16: `Test timeout exceeded`
+```
+Test timeout of 30000ms exceeded.
+  at tests/api/users.spec.ts:23
+```
+**Cause:** The API took too long, or `await` is missing and test never resolved.
+
+**Fix:**
+```typescript
+// Fix 1: increase timeout for slow APIs
+test('slow API test', async ({ request }) => {
+  test.setTimeout(60000);   // 60 seconds for this test
+  const response = await request.get('/slow-endpoint');
+  expect(response.status()).toBe(200);
+});
+
+// Fix 2: increase globally in playwright.config.ts
+use: {
+  actionTimeout: 30000,   // 30 seconds per action
+}
+timeout: 60000,           // 60 seconds per test
+
+// Fix 3: check for missing await — test hangs waiting
+const response = await request.get('/endpoint');  // ← await required
+```
+
+---
+
+### FAILURE 17: `TypeScript compilation error`
+```
+error TS2339: Property 'users' does not exist on type '{...}'
+error TS7006: Parameter 'request' implicitly has an 'any' type
+```
+**Cause:** TypeScript type errors — usually wrong import or wrong property access.
+
+**Fix:**
+```typescript
+// Error: Property 'users' does not exist
+// WRONG
+import { ENDPOINTS } from '../utils/constants';
+ENDPOINTS.users;   // ← if you named it 'USERS' not 'users'
+
+// CORRECT: match exact name from constants.ts
+export const ENDPOINTS = {
+  users: '/api/users',   // lowercase 'users'
+};
+
+// Error: Parameter implicitly has 'any' type
+// Add type annotation to any parameters
+body.data.forEach((user: any) => {   // ← add ': any'
+  expect(user.id).toBeDefined();
+});
+
+// Run TypeScript check without running tests:
+npx tsc --noEmit   // shows all type errors
+```
+
+---
+
+### FAILURE 18: `Cannot find module '../../utils/constants'`
+```
+Error: Cannot find module '../../utils/constants'
+Require stack: - /tests/api/posts.spec.ts
+```
+**Cause:** Import path is wrong. The `../..` count doesn't match the actual folder depth.
+
+**Fix:**
+```typescript
+// Your file is at: tests/api/posts.spec.ts
+// constants.ts is at: utils/constants.ts
+
+// Counting up from tests/api/:
+// tests/api/ → tests/ (one ..)
+// tests/ → root (two ..)
+// root/utils/constants
+
+// Correct import:
+import { ENDPOINTS } from '../../utils/constants';
+//                        ↑↑ two levels up from tests/api/
+
+// If tests were at: tests/posts.spec.ts (one level)
+import { ENDPOINTS } from '../utils/constants';
+//                        ↑ one level up
+
+// Quick check: look at your folder structure and count slashes
+```
+
+---
+
+### FAILURE 19: `Tests pass locally, fail in GitHub Actions CI`
+```
+# Local: all pass
+# GitHub Actions: Error: connect ECONNREFUSED
+```
+**Common causes:**
+```
+1. Missing Node.js setup in CI
+2. npm install not run
+3. Environment variables not set in CI
+4. Playwright browsers not installed in CI
+```
+
+**Fix — GitHub Actions workflow:**
+```yaml
+# .github/workflows/playwright.yml
+name: API Tests
+on: [push, pull_request]
+
+jobs:
+  test:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v3
+
+      - uses: actions/setup-node@v3
+        with:
+          node-version: 18       # ← required
+
+      - run: npm ci               # ← install exact versions
+
+      - run: npx playwright install   # ← even for API tests
+
+      - run: npx playwright test
+        env:
+          # ⚠️ Set these in GitHub repo → Settings → Secrets
+          API_TOKEN: ${{ secrets.API_TOKEN }}
+          BASE_URL: ${{ vars.BASE_URL }}
+
+      - uses: actions/upload-artifact@v3
+        if: always()             # ← upload even if tests fail
+        with:
+          name: playwright-report
+          path: playwright-report/
+```
+
+---
+
+### FAILURE 20: `expect is not defined` or wrong expect import
+```
+ReferenceError: expect is not defined
+```
+**Cause:** Wrong import at the top of the test file.
+
+**Fix:**
+```typescript
+// WRONG — missing expect in import
+import { test } from '@playwright/test';
+
+// CORRECT
+import { test, expect } from '@playwright/test';
+//             ↑ must include expect
+
+// Also check: if using custom expect, import from correct place
+import { expect } from '@playwright/test';   // Playwright's expect
+// NOT: import { expect } from 'expect';     // wrong library
+```
+
+---
+
+## QUICK DEBUGGING CHECKLIST
+
+When any test fails, check these in order:
+
+```typescript
+// 1. Print status + full body
+const response = await request.get('/endpoint');
+console.log('Status:', response.status());
+console.log('Headers:', response.headers());
+const body = await response.text();   // text() works even if not JSON
+console.log('Body:', body);
+
+// 2. Check if response is JSON at all
+if (response.headers()['content-type']?.includes('application/json')) {
+  const json = await response.json();
+  console.log(JSON.stringify(json, null, 2));
+} else {
+  console.log('NOT JSON:', await response.text());
+}
+
+// 3. Run with --debug to step through
+npx playwright test --debug
+
+// 4. Run only the failing test
+npx playwright test --grep "name of failing test"
+
+// 5. Check TypeScript errors
+npx tsc --noEmit
+
+// 6. If passes locally, fails in CI: check env vars
+console.log('baseURL:', process.env.BASE_URL);
+console.log('CI:', process.env.CI);
+```
+
+---
+
+## FAILURE REFERENCE TABLE
+
+| Error message | Most likely cause | First thing to check |
+|---------------|------------------|---------------------|
+| `ECONNREFUSED` | Wrong URL or server down | Open URL in browser |
+| `401 Unauthorized` | Missing/wrong auth token | Add Authorization header |
+| `403 Forbidden` | Wrong role/permission | Check API docs for required role |
+| `404 Not Found` | Wrong endpoint path | Check ENDPOINTS constant |
+| `415 Unsupported Media Type` | Missing Content-Type header | Add extraHTTPHeaders in config |
+| `429 Too Many Requests` | Rate limited | Add delay between tests |
+| `SSL error` | Self-signed certificate | Add `ignoreHTTPSErrors: true` |
+| `Cannot find module` | Wrong import path | Count `../` levels |
+| `TypeError: undefined` | Missing await | Add `await` before Playwright call |
+| `Timeout exceeded` | Slow API or missing await | Increase timeout or fix await |
+| `TypeScript error` | Wrong type/property | Run `npx tsc --noEmit` |
+| `302 Redirect` | API redirecting | Follow redirect or assert 302 |
+| `JSON parse error` | HTML returned instead of JSON | Print `response.text()` first |
+
+---
+
+*Assessment Guide — Playwright API Testing | TypeScript | 20 Real Failures + Fixes*
