@@ -15,10 +15,10 @@
 | 1 | HR & Resume / Behavioral | [PART1-HR-RESUME.md](guides/interview/PART1-HR-RESUME.md) |
 | 2 | Manual Testing | [PART2-MANUAL-TESTING.md](guides/interview/PART2-MANUAL-TESTING.md) |
 | 3 | Core Java | [PART3-JAVA.md](guides/interview/PART3-JAVA.md) |
-| 4 | *(file missing — not yet created)* | — |
+| 4 | Selenium WebDriver | [PART4-SELENIUM.md](guides/interview/PART4-SELENIUM.md) |
 | 5 | TestNG | [PART5-TESTNG.md](guides/interview/PART5-TESTNG.md) |
 | 6 | Playwright | [PART6-PLAYWRIGHT.md](guides/interview/PART6-PLAYWRIGHT.md) |
-| 7 | *(file missing — not yet created)* | — |
+| 7 | API Testing (RestAssured + Postman) | [PART7-API-TESTING.md](guides/interview/PART7-API-TESTING.md) |
 | 8 | Appium | [PART8-APPIUM.md](guides/interview/PART8-APPIUM.md) |
 | 9 | SQL | [PART9-SQL.md](guides/interview/PART9-SQL.md) |
 | 10 | CI/CD | [PART10-CICD.md](guides/interview/PART10-CICD.md) |
