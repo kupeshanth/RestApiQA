@@ -2501,4 +2501,340 @@ expect(requestBody.total).toBeGreaterThan(0);
 
 **Why this matters:** Testing UI error states, loading states, and edge cases would require the backend to deliberately fail — page.route() removes that dependency. Your UI tests are independent of the API's actual data.
 
-*End of File 05 — Playwright UI Testing Complete Interview Q&A Guide*
+---
+
+## SECTION — TEST REPORTING FOR PLAYWRIGHT
+
+---
+
+### Three Reporting Options
+
+```
+Option A: Playwright Built-in HTML Report  → zero setup, best for Playwright
+Option B: List / Dot Reporter             → CI terminal output
+Option C: Allure for Playwright           → setup needed, most professional
+```
+
+---
+
+### OPTION A — Playwright Built-in HTML Report (Zero Setup — Best Option)
+
+**This is Playwright's own report — richer than anything you'll need for most projects.**
+
+#### Setup in playwright.config.ts
+
+```typescript
+export default defineConfig({
+  reporter: [
+    // HTML report — opens in browser
+    ['html', {
+      outputFolder: 'playwright-report',  // where to save
+      open: 'on-failure',                 // auto-open if tests fail
+      // open: 'never'   ← for CI (never auto-open)
+      // open: 'always'  ← always open after every run
+    }],
+
+    // Also show results in terminal while running
+    ['list'],
+  ],
+
+  use: {
+    // These get attached to the HTML report automatically:
+    screenshot: 'only-on-failure',  // screenshot saved when test fails
+    video:      'retain-on-failure', // video saved when test fails
+    trace:      'on-first-retry',    // trace saved when test retries
+  },
+});
+```
+
+#### Run Tests and Open Report
+
+```powershell
+# Run tests — generates playwright-report/ folder
+npx playwright test
+
+# Open the HTML report in browser
+npx playwright show-report
+
+# Open a specific report folder
+npx playwright show-report playwright-report/
+
+# Run and auto-open report when done
+npx playwright test --reporter=html
+```
+
+#### What the Playwright HTML Report Shows
+
+```
+Summary bar:
+  ✓ 14 passed   ✗ 1 failed   ↻ 0 flaky   ○ 0 skipped
+
+Filter by:
+  Status: passed / failed / skipped / flaky
+  Project: chromium / firefox / webkit
+  Duration: slow tests first
+
+Each test row:
+  ✓ GET all users returns 200 with data      chromium   512ms
+  ✗ POST create user — response body check  chromium   891ms  ← CLICK TO EXPAND
+
+Expanded failure view:
+  Error:
+    expect(received).toBe(expected)
+    Expected: 201
+    Received: 400
+
+  Call log:
+    - navigating to https://reqres.in/api/users
+    - apiRequestContext.post /users
+    - expect.toBe with timeout 5000ms
+    - received value 400
+
+  Screenshot: [attached image of page at moment of failure]
+  Video:      [click to replay the test run]
+  Trace:      [click to open full step-by-step trace viewer]
+```
+
+---
+
+### OPTION B — Terminal Reporters for CI/CD
+
+```typescript
+// playwright.config.ts
+reporter: [
+  ['list'],      // shows each test as it runs — good for local development
+  ['dot'],       // minimal dots — good for CI (less output)
+  ['line'],      // one line per test — compact
+  ['json', { outputFile: 'results.json' }],       // machine-readable
+  ['junit', { outputFile: 'results/junit.xml' }], // for Jenkins/GitHub Actions
+];
+```
+
+```powershell
+# Run with specific reporter
+npx playwright test --reporter=list
+npx playwright test --reporter=dot
+npx playwright test --reporter=html
+npx playwright test --reporter=junit
+
+# Multiple reporters at once (defined in config is better)
+npx playwright test --reporter=html,list
+```
+
+**List reporter output:**
+```
+Running 14 tests using 4 workers
+
+  ✓  tests/api/users.spec.ts:8 › GET all users returns 200     (512ms)
+  ✓  tests/api/users.spec.ts:21 › GET user by ID returns 200   (198ms)
+  ✗  tests/api/users.spec.ts:34 › POST create user              (891ms)
+  ✓  tests/api/users.spec.ts:52 › DELETE user returns 204       (203ms)
+
+  1 failed
+  1) tests/api/users.spec.ts:34 › POST create user
+     Error: expect(received).toBe(expected)
+     Expected: 201, Received: 400
+```
+
+---
+
+### OPTION C — Allure Report for Playwright (TypeScript)
+
+#### STEP 1 — Install Allure for Playwright
+
+```powershell
+npm install --save-dev allure-playwright
+npm install --save-dev @playwright/test
+```
+
+#### STEP 2 — Configure in playwright.config.ts
+
+```typescript
+import { defineConfig } from '@playwright/test';
+
+export default defineConfig({
+  reporter: [
+    ['allure-playwright', {
+      detail: true,         // include step details
+      outputFolder: 'allure-results',  // where to save raw data
+      suiteTitle: false,
+    }],
+    ['list'],  // keep terminal output too
+  ],
+});
+```
+
+#### STEP 3 — Add Allure Decorators to Tests
+
+```typescript
+import { test, expect } from '@playwright/test';
+import { allure } from 'allure-playwright';
+
+test.describe('User API Tests', () => {
+
+  test('GET all users returns 200 with data', async ({ request }) => {
+    // Add metadata to Allure report
+    allure.epic('User Management');
+    allure.feature('GET Users');
+    allure.story('List all users');
+    allure.severity('critical');
+    allure.description('Verify GET /users returns 200 with non-empty user list');
+    allure.link('https://jira.company.com/PROJ-101', 'JIRA Ticket');
+
+    // Steps — each shows as a step in the report
+    await allure.step('Send GET request to /users', async () => {
+      const response = await request.get('/users');
+      expect(response.status()).toBe(200);
+
+      await allure.step('Verify response body', async () => {
+        const body = await response.json();
+        expect(body.data.length).toBeGreaterThan(0);
+
+        // Attach response body to report for debugging
+        allure.attachment('Response Body', JSON.stringify(body, null, 2), 'application/json');
+      });
+    });
+  });
+
+  test('POST create user returns 201 @smoke', async ({ request }) => {
+    allure.severity('normal');
+    allure.tag('smoke');
+    allure.tag('regression');
+
+    const response = await request.post('/users', {
+      data: { name: 'QA Engineer', job: 'Tester' }
+    });
+    expect(response.status()).toBe(201);
+  });
+});
+```
+
+#### STEP 4 — Run Tests
+
+```powershell
+npx playwright test
+# allure-results/ folder is created with raw JSON files
+```
+
+#### STEP 5 — Install Allure CLI and Open Report
+
+```powershell
+# Install Allure CLI (one time)
+choco install allure           # Windows Admin PowerShell
+# OR
+npm install -g allure-commandline   # via npm (no admin needed)
+
+# Verify:
+allure --version
+
+# Open live report in browser
+allure serve allure-results/
+
+# Generate static HTML
+allure generate allure-results/ --clean -o allure-report/
+allure open allure-report/
+```
+
+---
+
+### Screenshots and Videos — Automatic Attachment
+
+```typescript
+// playwright.config.ts — these attach automatically to the report on failure
+use: {
+  screenshot: 'only-on-failure',   // saved as PNG, attached to HTML report
+  video:      'retain-on-failure', // saved as WebM, attached to HTML report
+  trace:      'on-first-retry',    // saved as ZIP, viewable in trace viewer
+},
+
+// What appears in HTML report for failed test:
+// [Screenshot] → click to view
+// [Video]      → click to play back
+// [Trace]      → click to open step-by-step trace viewer
+```
+
+**Trace viewer** (most powerful Playwright debug tool):
+```powershell
+# Open trace file manually
+npx playwright show-trace test-results/test-name/trace.zip
+
+# OR — it's linked directly in the HTML report
+# Click the test → click "Trace" button → opens in browser
+# Shows: every action, before/after screenshot, network requests, console
+```
+
+---
+
+### Playwright Report — Complete Command Reference
+
+```powershell
+# ── RUN + REPORT ─────────────────────────────────────────────────────────────
+npx playwright test                           # run all tests, generate report
+npx playwright test --reporter=html           # explicitly use HTML reporter
+npx playwright show-report                    # open the last generated report
+
+# ── SPECIFIC REPORTER ─────────────────────────────────────────────────────────
+npx playwright test --reporter=list           # show each test as it runs
+npx playwright test --reporter=dot            # minimal dots for CI
+npx playwright test --reporter=junit          # XML for Jenkins/GitHub Actions
+
+# ── ALLURE ────────────────────────────────────────────────────────────────────
+npx playwright test                           # generates allure-results/ (if configured)
+allure serve allure-results/                  # live report in browser
+allure generate allure-results/ -o allure-report/ --clean
+allure open allure-report/
+
+# ── TRACE VIEWER ──────────────────────────────────────────────────────────────
+npx playwright show-trace test-results/*/trace.zip   # open trace file
+
+# ── UPDATE VISUAL BASELINES ───────────────────────────────────────────────────
+npx playwright test --update-snapshots        # update screenshot baselines
+```
+
+---
+
+### GitHub Actions — Upload Report as Artifact
+
+```yaml
+# .github/workflows/playwright.yml
+- name: Run Playwright tests
+  run: npx playwright test
+
+- name: Upload HTML report
+  uses: actions/upload-artifact@v3
+  if: always()           # upload even if tests fail
+  with:
+    name: playwright-report
+    path: playwright-report/
+    retention-days: 30
+
+# After workflow runs:
+# GitHub Actions → your workflow run → Artifacts → download playwright-report.zip
+# Extract → open index.html in browser
+```
+
+---
+
+### Q: What reporting do you use in Playwright?
+
+```
+For Playwright I use two layers:
+
+1. Playwright's built-in HTML reporter for local development and team sharing.
+   It attaches screenshots on failure automatically and lets me replay the
+   test as a video — this is the fastest way to understand what went wrong.
+
+2. For CI/CD I add --reporter=junit alongside HTML to generate JUnit XML.
+   GitHub Actions/Jenkins reads the XML and shows pass/fail counts inline
+   in the pipeline dashboard without downloading any files.
+
+3. For professional stakeholder reporting I use Allure — it adds severity
+   levels, story mapping, and trend graphs that show pass rate over sprints.
+
+The trace viewer is the most powerful debugging tool — when a test fails in
+CI at 3am, the trace file attached to the HTML report shows me every action,
+every network request, and before/after screenshots for each step. I can
+debug a CI failure in minutes without re-running the test.
+```
+
+*End of File 05 — Playwright UI Testing Complete Interview Q&A Guide | Reporting Added*
