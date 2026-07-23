@@ -6,6 +6,29 @@
 
 ---
 
+## INTERVIEW CHAPTER FILES (guides/interview/)
+
+> Deep-dive chapters personalised for Kupeshanth — behavioral answers, live scenario practice, coding questions.
+
+| Part | Topic | Link |
+|------|-------|------|
+| 1 | HR & Resume / Behavioral | [PART1-HR-RESUME.md](guides/interview/PART1-HR-RESUME.md) |
+| 2 | Manual Testing | [PART2-MANUAL-TESTING.md](guides/interview/PART2-MANUAL-TESTING.md) |
+| 3 | Core Java | [PART3-JAVA.md](guides/interview/PART3-JAVA.md) |
+| 4 | *(file missing — not yet created)* | — |
+| 5 | TestNG | [PART5-TESTNG.md](guides/interview/PART5-TESTNG.md) |
+| 6 | Playwright | [PART6-PLAYWRIGHT.md](guides/interview/PART6-PLAYWRIGHT.md) |
+| 7 | *(file missing — not yet created)* | — |
+| 8 | Appium | [PART8-APPIUM.md](guides/interview/PART8-APPIUM.md) |
+| 9 | SQL | [PART9-SQL.md](guides/interview/PART9-SQL.md) |
+| 10 | CI/CD | [PART10-CICD.md](guides/interview/PART10-CICD.md) |
+| 11 | Agile & JIRA | [PART11-AGILE-JIRA.md](guides/interview/PART11-AGILE-JIRA.md) |
+| 12 | Framework Design | [PART12-FRAMEWORK-DESIGN.md](guides/interview/PART12-FRAMEWORK-DESIGN.md) |
+| 13 | Coding Challenges | [PART13-CODING.md](guides/interview/PART13-CODING.md) |
+| 14 | Live Scenarios | [PART14-SCENARIOS.md](guides/interview/PART14-SCENARIOS.md) |
+
+---
+
 ## NAVIGATE TO FULL GUIDES
 
 | # | Topic | Full Guide |
