@@ -1657,3 +1657,1505 @@ long activeCount = driver.findElements(By.cssSelector(".user-row"))
     .filter(el -> el.getText().contains("Active"))
     .count();
 ```
+
+---
+
+## Q51. How do you handle tables?
+
+```java
+// Table structure: <table><thead><tr><th></th></tr></thead><tbody><tr><td></td></tr></tbody></table>
+
+// Get all rows in tbody
+List<WebElement> rows = driver.findElements(By.cssSelector("table tbody tr"));
+System.out.println("Row count: " + rows.size());
+
+// Get cell value — row 2, column 3
+String cellValue = driver.findElement(
+    By.cssSelector("table tbody tr:nth-child(2) td:nth-child(3)")).getText();
+
+// Iterate all rows and columns
+List<WebElement> allRows = driver.findElements(By.cssSelector("table tbody tr"));
+for (int i = 0; i < allRows.size(); i++) {
+    List<WebElement> cells = allRows.get(i).findElements(By.tagName("td"));
+    for (int j = 0; j < cells.size(); j++) {
+        System.out.printf("Row %d, Col %d: %s%n", i+1, j+1, cells.get(j).getText());
+    }
+}
+
+// Find row by cell content — click Edit in the row containing "John"
+List<WebElement> tableRows = driver.findElements(By.cssSelector("table tbody tr"));
+for (WebElement row : tableRows) {
+    if (row.getText().contains("John")) {
+        row.findElement(By.linkText("Edit")).click();
+        break;
+    }
+}
+
+// XPath — find Edit button in same row as "John"
+driver.findElement(By.xpath("//table//tr[td[text()='John']]//a[text()='Edit']")).click();
+
+// Get all header column names
+List<WebElement> headers = driver.findElements(By.cssSelector("table thead th"));
+headers.forEach(h -> System.out.println(h.getText()));
+```
+
+---
+
+## Q52. How do you verify sorting in a table?
+
+```java
+// Click sort header
+driver.findElement(By.cssSelector("th.name-col")).click();
+
+// Get column values after sort
+List<String> afterSort = driver.findElements(By.cssSelector("table tbody tr td:nth-child(1)"))
+    .stream().map(WebElement::getText).collect(Collectors.toList());
+
+// Verify ascending sort
+List<String> expected = new ArrayList<>(afterSort);
+Collections.sort(expected);
+Assert.assertEquals(afterSort, expected, "Table not sorted ascending");
+
+// Verify descending sort
+driver.findElement(By.cssSelector("th.name-col")).click();
+List<String> descValues = driver.findElements(By.cssSelector("table tbody tr td:nth-child(1)"))
+    .stream().map(WebElement::getText).collect(Collectors.toList());
+List<String> expectedDesc = new ArrayList<>(descValues);
+Collections.sort(expectedDesc, Collections.reverseOrder());
+Assert.assertEquals(descValues, expectedDesc, "Table not sorted descending");
+
+// Numeric sort
+List<Double> prices = driver.findElements(By.cssSelector("td.price")).stream()
+    .map(el -> Double.parseDouble(el.getText().replace("$", "")))
+    .collect(Collectors.toList());
+List<Double> sortedPrices = new ArrayList<>(prices);
+Collections.sort(sortedPrices);
+Assert.assertEquals(prices, sortedPrices, "Prices not sorted ascending");
+```
+
+---
+
+## Q53. How do you handle shadow DOM in Selenium 4?
+
+```java
+// Shadow DOM elements are encapsulated — regular findElement cannot reach them
+
+// Selenium 4 — getShadowRoot()
+WebElement host = driver.findElement(By.cssSelector("my-custom-element"));
+SearchContext shadowRoot = host.getShadowRoot();
+
+// Find inside shadow root
+WebElement shadowInput = shadowRoot.findElement(By.cssSelector("input.inner-field"));
+shadowInput.sendKeys("text inside shadow DOM");
+
+// Nested shadow DOM
+SearchContext outer = driver.findElement(By.cssSelector("outer-el")).getShadowRoot();
+SearchContext inner = outer.findElement(By.cssSelector("inner-el")).getShadowRoot();
+inner.findElement(By.cssSelector(".target")).click();
+
+// Pre-Selenium 4 — JavaScript
+JavascriptExecutor js = (JavascriptExecutor) driver;
+WebElement shadowEl = (WebElement) js.executeScript(
+    "return arguments[0].shadowRoot.querySelector('input')", host);
+shadowEl.sendKeys("value");
+```
+
+---
+
+## Q54. What are Selenium 4 new features?
+
+```java
+// 1. Relative Locators
+import static org.openqa.selenium.support.locators.RelativeLocator.with;
+
+WebElement pwdField = driver.findElement(
+    with(By.tagName("input")).below(By.id("usernameLabel")));
+WebElement btn = driver.findElement(
+    with(By.tagName("button")).toRightOf(By.id("cancelBtn")));
+
+// 2. Chrome DevTools Protocol (CDP)
+ChromeDriver chrome = (ChromeDriver) driver;
+DevTools devTools = chrome.getDevTools();
+devTools.createSession();
+devTools.send(Network.enable(Optional.empty(), Optional.empty(), Optional.empty()));
+devTools.send(Network.setBlockedURLs(Arrays.asList("*.ads.com/*")));
+
+// 3. New Window API
+driver.switchTo().newWindow(WindowType.TAB);
+driver.switchTo().newWindow(WindowType.WINDOW);
+
+// 4. Element-level Screenshot
+File img = driver.findElement(By.id("chart")).getScreenshotAs(OutputType.FILE);
+
+// 5. getRect() — combined location + size
+Rectangle rect = element.getRect();
+System.out.println("X=" + rect.getX() + " W=" + rect.getWidth());
+
+// 6. W3C protocol fully adopted — no JSON Wire Protocol
+// 7. Selenium Grid 4 — Docker/Kubernetes, observability UI
+// 8. getShadowRoot() for shadow DOM
+```
+
+---
+
+## Q55. What is Selenium Grid?
+
+Selenium Grid runs tests across multiple browsers, OSes, and machines in parallel.
+
+```
+Hub (central server)
+  ├── Node 1: Windows + Chrome
+  ├── Node 2: Windows + Firefox
+  └── Node 3: Linux + Chrome headless
+```
+
+```java
+// Connect to Grid via RemoteWebDriver
+ChromeOptions opts = new ChromeOptions();
+opts.setPlatformName("LINUX");
+WebDriver driver = new RemoteWebDriver(new URL("http://grid-host:4444"), opts);
+
+// All Selenium commands work the same — Grid is transparent to test code
+driver.get("https://example.com");
+driver.findElement(By.id("username")).sendKeys("admin");
+```
+
+---
+
+## Q56. How do you set up Selenium Grid (Grid 4)?
+
+```bash
+# Download selenium-server-4.x.jar
+
+# Standalone mode (hub + node on one machine)
+java -jar selenium-server-4.x.jar standalone
+
+# Hub-Node mode
+java -jar selenium-server-4.x.jar hub --port 4444
+java -jar selenium-server-4.x.jar node --hub http://hub:4444 --port 5555
+
+# Grid Console: http://localhost:4444/ui
+```
+
+```java
+// Test connecting to Grid
+ChromeOptions opts = new ChromeOptions();
+WebDriver driver = new RemoteWebDriver(new URL("http://localhost:4444"), opts);
+driver.get("https://example.com");
+driver.quit();
+```
+
+---
+
+## Q57. How do you run tests on BrowserStack?
+
+```java
+MutableCapabilities caps = new MutableCapabilities();
+caps.setCapability("browserName", "Chrome");
+
+HashMap<String, Object> bsOptions = new HashMap<>();
+bsOptions.put("os", "Windows");
+bsOptions.put("osVersion", "11");
+bsOptions.put("projectName", "Qoria Automation");
+bsOptions.put("buildName", "CI Build #42");
+bsOptions.put("userName", System.getenv("BROWSERSTACK_USER"));
+bsOptions.put("accessKey", System.getenv("BROWSERSTACK_KEY"));
+caps.setCapability("bstack:options", bsOptions);
+
+WebDriver driver = new RemoteWebDriver(
+    new URL("https://hub-cloud.browserstack.com/wd/hub"), caps);
+
+// Mark pass/fail
+JavascriptExecutor js = (JavascriptExecutor) driver;
+js.executeScript(
+    "browserstack_executor: {\"action\":\"setSessionStatus\"," +
+    "\"arguments\":{\"status\":\"passed\",\"reason\":\"All assertions passed\"}}");
+```
+
+---
+
+## Q58. What is RemoteWebDriver?
+
+RemoteWebDriver connects to a browser session running on a different machine (Grid, cloud service, Docker container).
+
+```java
+import org.openqa.selenium.remote.RemoteWebDriver;
+
+ChromeOptions options = new ChromeOptions();
+WebDriver driver = new RemoteWebDriver(new URL("http://localhost:4444"), options);
+
+// Same API as local WebDriver
+driver.get("https://example.com");
+driver.findElement(By.id("username")).sendKeys("admin");
+
+// For TakesScreenshot on remote driver — augment it
+WebDriver augmented = new Augmenter().augment(driver);
+File screenshot = ((TakesScreenshot) augmented).getScreenshotAs(OutputType.FILE);
+```
+
+---
+
+## Q59. How do you run tests in headless mode?
+
+```java
+// Chrome headless
+ChromeOptions opts = new ChromeOptions();
+opts.addArguments("--headless=new");          // Chrome 112+ / Selenium 4
+opts.addArguments("--no-sandbox");
+opts.addArguments("--disable-dev-shm-usage");
+opts.addArguments("--window-size=1920,1080");
+WebDriver driver = new ChromeDriver(opts);
+
+// Firefox headless
+FirefoxOptions ffOpts = new FirefoxOptions();
+ffOpts.addArguments("-headless");
+WebDriver driver = new FirefoxDriver(ffOpts);
+
+// From system property
+boolean headless = Boolean.parseBoolean(System.getProperty("headless", "false"));
+if (headless) opts.addArguments("--headless=new");
+
+// Run: mvn test -Dheadless=true
+```
+
+---
+
+## Q60. How do you run cross-browser tests?
+
+```xml
+<!-- testng-crossbrowser.xml -->
+<suite name="Cross Browser" parallel="tests" thread-count="3">
+  <test name="Chrome">
+    <parameter name="browser" value="chrome"/>
+    <classes><class name="com.tests.LoginTest"/></classes>
+  </test>
+  <test name="Firefox">
+    <parameter name="browser" value="firefox"/>
+    <classes><class name="com.tests.LoginTest"/></classes>
+  </test>
+  <test name="Edge">
+    <parameter name="browser" value="edge"/>
+    <classes><class name="com.tests.LoginTest"/></classes>
+  </test>
+</suite>
+```
+
+```java
+@Parameters({"browser"})
+@BeforeMethod
+public void setUp(@Optional("chrome") String browser) {
+    DriverManager.set(DriverFactory.createDriver(browser));
+}
+// Run: mvn test -DsuiteXmlFiles=testng-crossbrowser.xml
+```
+
+---
+
+## Q61. What is ThreadLocal\<WebDriver\>?
+
+ThreadLocal gives each thread its own isolated WebDriver. Without it, parallel tests share and overwrite each other's driver.
+
+```java
+public class DriverManager {
+    private static final ThreadLocal<WebDriver> tl = new ThreadLocal<>();
+
+    public static void setDriver(WebDriver d) { tl.set(d); }
+    public static WebDriver getDriver()       { return tl.get(); }
+    public static void removeDriver() {
+        if (tl.get() != null) { tl.get().quit(); tl.remove(); }
+    }
+}
+
+// Thread-1's @BeforeMethod → setDriver(Chrome-1)
+// Thread-2's @BeforeMethod → setDriver(Firefox-2)
+// Thread-1 calls getDriver() → gets Chrome-1 (not Firefox-2)
+// Thread-2 calls getDriver() → gets Firefox-2 (not Chrome-1)
+```
+
+---
+
+## Q62. What happens without ThreadLocal in parallel tests?
+
+```java
+// WRONG — static shared field
+public static WebDriver driver;  // shared by all threads
+
+// Thread-1: driver = new ChromeDriver()   → driver points to Chrome-1
+// Thread-2: driver = new ChromeDriver()   → driver NOW points to Chrome-2 (overwrites!)
+// Thread-1: driver.findElement(...)       → interacts with Chrome-2 by accident
+// → Wrong page, wrong session, test results corrupt each other
+// → Flaky failures, NPEs, incorrect assertions
+
+// CORRECT: ThreadLocal — each thread reads/writes its own slot
+private static final ThreadLocal<WebDriver> driver = new ThreadLocal<>();
+```
+
+---
+
+## Q63. What is the difference between parallel="tests", "classes", "methods"?
+
+```xml
+<!-- parallel="tests" — each <test> block is one thread; methods inside are sequential -->
+<suite parallel="tests" thread-count="3">
+  <test name="T1">...</test>  <!-- thread 1 -->
+  <test name="T2">...</test>  <!-- thread 2 -->
+</suite>
+
+<!-- parallel="classes" — each class is one thread -->
+<suite parallel="classes" thread-count="3">
+  <test name="All">
+    <classes>
+      <class name="LoginTest"/>     <!-- thread 1 -->
+      <class name="SearchTest"/>    <!-- thread 2 -->
+    </classes>
+  </test>
+</suite>
+
+<!-- parallel="methods" — every @Test method is its own thread (most parallel) -->
+<suite parallel="methods" thread-count="5">
+  <test name="All"><classes>...</classes></test>
+</suite>
+```
+
+**Rule:** Always pair any parallel mode with `ThreadLocal<WebDriver>`.
+
+---
+
+## Q64. How do you take screenshots on failure in TestNG?
+
+```java
+public class FailureListener implements ITestListener {
+    @Override
+    public void onTestFailure(ITestResult result) {
+        WebDriver driver = DriverManager.getDriver();
+        if (driver == null) return;
+        File src = ((TakesScreenshot) driver).getScreenshotAs(OutputType.FILE);
+        try {
+            String path = "screenshots/" + result.getName() + "_"
+                + new SimpleDateFormat("HHmmss").format(new Date()) + ".png";
+            FileUtils.copyFile(src, new File(path));
+        } catch (IOException e) { e.printStackTrace(); }
+    }
+}
+
+// Register in testng.xml
+// <listeners><listener class-name="com.listeners.FailureListener"/></listeners>
+
+// Or in @AfterMethod
+@AfterMethod
+public void tearDown(ITestResult result) {
+    if (result.getStatus() == ITestResult.FAILURE) {
+        File src = ((TakesScreenshot) DriverManager.getDriver())
+            .getScreenshotAs(OutputType.FILE);
+        try { FileUtils.copyFile(src, new File("screenshots/" + result.getName() + ".png")); }
+        catch (IOException e) { e.printStackTrace(); }
+    }
+    DriverManager.removeDriver();
+}
+```
+
+---
+
+## Q65. How do you handle dynamic wait for AJAX elements?
+
+```java
+WebDriverWait wait = new WebDriverWait(driver, Duration.ofSeconds(15));
+
+// Wait for spinner to disappear, then element to appear
+wait.until(ExpectedConditions.invisibilityOfElementLocated(By.id("spinner")));
+WebElement data = wait.until(
+    ExpectedConditions.visibilityOfElementLocated(By.id("resultsTable")));
+
+// FluentWait — ignore transient exceptions
+FluentWait<WebDriver> fluent = new FluentWait<>(driver)
+    .withTimeout(Duration.ofSeconds(20))
+    .pollingEvery(Duration.ofMillis(250))
+    .ignoring(NoSuchElementException.class)
+    .ignoring(StaleElementReferenceException.class);
+
+WebElement el = fluent.until(d -> {
+    WebElement e = d.findElement(By.id("result"));
+    return (e.isDisplayed() && !e.getText().isEmpty()) ? e : null;
+});
+
+// Wait for row count to change
+int before = driver.findElements(By.cssSelector("tr.data")).size();
+driver.findElement(By.id("loadMoreBtn")).click();
+wait.until(d -> d.findElements(By.cssSelector("tr.data")).size() > before);
+```
+
+---
+
+## Q66. How do you wait for jQuery AJAX to complete?
+
+```java
+WebDriverWait wait = new WebDriverWait(driver, Duration.ofSeconds(20));
+JavascriptExecutor js = (JavascriptExecutor) driver;
+
+wait.until(d -> {
+    try {
+        boolean jqDone  = (Boolean) js.executeScript("return jQuery.active == 0");
+        boolean docDone = js.executeScript("return document.readyState").equals("complete");
+        return jqDone && docDone;
+    } catch (Exception e) {
+        return true;  // jQuery not present — skip
+    }
+});
+```
+
+---
+
+## Q67. How do you handle file download?
+
+```java
+// Configure Chrome download directory
+String downloadPath = System.getProperty("user.dir") + "/downloads";
+new File(downloadPath).mkdirs();
+
+HashMap<String, Object> prefs = new HashMap<>();
+prefs.put("download.default_directory", downloadPath);
+prefs.put("download.prompt_for_download", false);
+prefs.put("safebrowsing.enabled", false);
+
+ChromeOptions opts = new ChromeOptions();
+opts.setExperimentalOption("prefs", prefs);
+WebDriver driver = new ChromeDriver(opts);
+
+// Trigger download
+driver.findElement(By.id("downloadBtn")).click();
+
+// Poll until file appears
+public boolean waitForFile(String fileName, int timeoutSec) throws InterruptedException {
+    File dir = new File(downloadPath);
+    long end = System.currentTimeMillis() + timeoutSec * 1000L;
+    while (System.currentTimeMillis() < end) {
+        if (Arrays.stream(dir.listFiles()).anyMatch(f -> f.getName().equals(fileName))) return true;
+        Thread.sleep(500);
+    }
+    return false;
+}
+Assert.assertTrue(waitForFile("report.pdf", 15), "File not downloaded");
+```
+
+---
+
+## Q68. How do you handle cookies?
+
+```java
+// Get all cookies
+driver.manage().getCookies().forEach(c -> System.out.println(c.getName() + "=" + c.getValue()));
+
+// Get specific cookie
+Cookie session = driver.manage().getCookieNamed("sessionId");
+
+// Add cookie (inject auth — skip login)
+driver.get("https://example.com");  // must be on domain first
+Cookie auth = new Cookie.Builder("authToken", "abc123")
+    .domain("example.com").path("/").isHttpOnly(true).build();
+driver.manage().addCookie(auth);
+driver.navigate().refresh();
+
+// Delete
+driver.manage().deleteCookieNamed("trackingCookie");
+driver.manage().deleteAllCookies();
+```
+
+---
+
+## Q69. How do you set localStorage via Selenium?
+
+```java
+JavascriptExecutor js = (JavascriptExecutor) driver;
+
+js.executeScript("localStorage.setItem('authToken','abc123')");
+String token = (String) js.executeScript("return localStorage.getItem('authToken')");
+js.executeScript("localStorage.removeItem('authToken')");
+js.executeScript("localStorage.clear()");
+
+// sessionStorage
+js.executeScript("sessionStorage.setItem('flag','true')");
+
+// Navigate to app with pre-set token (bypass login)
+driver.get("https://example.com");
+js.executeScript("localStorage.setItem('token','" + authToken + "')");
+driver.navigate().to("https://example.com/dashboard");
+```
+
+---
+
+## Q70. How do you handle frames that load dynamically?
+
+```java
+WebDriverWait wait = new WebDriverWait(driver, Duration.ofSeconds(15));
+
+// Wait for iframe to be available and switch in one step
+wait.until(ExpectedConditions.frameToBeAvailableAndSwitchToIt(By.id("dynamicFrame")));
+driver.findElement(By.id("submitBtn")).click();
+driver.switchTo().defaultContent();
+
+// If frame has no id — wait for element, then switch by element reference
+wait.until(ExpectedConditions.presenceOfElementLocated(By.cssSelector("iframe.report")));
+WebElement frame = driver.findElement(By.cssSelector("iframe.report"));
+driver.switchTo().frame(frame);
+```
+
+---
+
+## Q71. What is soft assertion vs hard assertion in Selenium context?
+
+```java
+// Hard assertion — stops test immediately on first failure
+Assert.assertEquals(driver.getTitle(), "Dashboard");  // fails here if wrong
+Assert.assertTrue(element.isDisplayed());             // never reached if above fails
+
+// Soft assertion — collects ALL failures, reports together at assertAll()
+SoftAssert soft = new SoftAssert();
+soft.assertEquals(driver.getTitle(), "Dashboard", "Title wrong");
+soft.assertTrue(driver.findElement(By.id("welcome")).isDisplayed(), "Welcome hidden");
+soft.assertEquals(driver.findElement(By.id("user")).getText(), "Admin", "User wrong");
+soft.assertAll();  // throws AssertionError listing ALL failures
+
+// Use soft assertions when verifying multiple independent fields on the same page
+```
+
+---
+
+## Q72. How do you verify a page has fully loaded?
+
+```java
+// document.readyState = "complete"
+WebDriverWait wait = new WebDriverWait(driver, Duration.ofSeconds(30));
+wait.until(d -> ((JavascriptExecutor) d)
+    .executeScript("return document.readyState").equals("complete"));
+
+// Combined: readyState + jQuery + key element
+public void waitForPageLoad(By keyElement) {
+    WebDriverWait wait = new WebDriverWait(driver, Duration.ofSeconds(30));
+    wait.until(d -> {
+        JavascriptExecutor js = (JavascriptExecutor) d;
+        boolean ready = js.executeScript("return document.readyState").equals("complete");
+        boolean jq = true;
+        try { jq = (Boolean) js.executeScript("return jQuery.active==0"); }
+        catch (Exception ignored) {}
+        return ready && jq;
+    });
+    wait.until(ExpectedConditions.visibilityOfElementLocated(keyElement));
+}
+```
+
+---
+
+## Q73. How do you handle broken images?
+
+```java
+JavascriptExecutor js = (JavascriptExecutor) driver;
+List<WebElement> images = driver.findElements(By.tagName("img"));
+List<String> broken = new ArrayList<>();
+
+for (WebElement img : images) {
+    boolean isBroken = (Boolean) js.executeScript(
+        "return arguments[0].naturalWidth == 0", img);
+    if (isBroken) broken.add(img.getAttribute("src"));
+}
+
+Assert.assertTrue(broken.isEmpty(), "Broken images: " + broken);
+```
+
+---
+
+## Q74. How do you find all links and verify none are broken?
+
+```java
+List<WebElement> anchors = driver.findElements(By.tagName("a"));
+List<String> brokenLinks = new ArrayList<>();
+
+for (WebElement a : anchors) {
+    String href = a.getAttribute("href");
+    if (href == null || href.startsWith("#") || href.startsWith("javascript")) continue;
+    try {
+        HttpURLConnection conn = (HttpURLConnection) new URL(href).openConnection();
+        conn.setRequestMethod("HEAD");
+        conn.setConnectTimeout(3000);
+        conn.connect();
+        if (conn.getResponseCode() >= 400) brokenLinks.add(href + " [" + conn.getResponseCode() + "]");
+        conn.disconnect();
+    } catch (Exception e) {
+        brokenLinks.add(href + " [Error: " + e.getMessage() + "]");
+    }
+}
+Assert.assertTrue(brokenLinks.isEmpty(), "Broken links: " + brokenLinks);
+```
+
+---
+
+## Q75. How do you handle calendars/date pickers?
+
+```java
+// Strategy 1: sendKeys directly into date field
+WebElement dateInput = driver.findElement(By.id("departureDate"));
+dateInput.clear();
+dateInput.sendKeys("25/07/2026");
+dateInput.sendKeys(Keys.TAB);
+
+// Strategy 2: JavaScript value set (bypasses date picker UI)
+JavascriptExecutor js = (JavascriptExecutor) driver;
+js.executeScript("arguments[0].value='2026-07-25'", dateInput);
+js.executeScript("arguments[0].dispatchEvent(new Event('change'))", dateInput);
+
+// Strategy 3: Navigate the calendar widget
+driver.findElement(By.id("calendarTrigger")).click();
+WebDriverWait wait = new WebDriverWait(driver, Duration.ofSeconds(5));
+wait.until(ExpectedConditions.visibilityOfElementLocated(By.cssSelector(".calendar")));
+
+// Navigate months until correct month
+while (!driver.findElement(By.cssSelector(".calendar-month")).getText().contains("July 2026")) {
+    driver.findElement(By.cssSelector(".next-month")).click();
+}
+driver.findElement(By.xpath("//td[@data-date='25']")).click();
+```
+
+---
+
+## Q76. How do you handle autocomplete fields?
+
+```java
+WebElement searchInput = driver.findElement(By.id("citySearch"));
+searchInput.sendKeys("Col");
+
+WebDriverWait wait = new WebDriverWait(driver, Duration.ofSeconds(10));
+wait.until(ExpectedConditions.visibilityOfElementLocated(By.cssSelector(".suggestions")));
+
+// Click specific suggestion
+driver.findElement(By.xpath("//ul[@class='suggestions']//li[text()='Colombo']")).click();
+
+// Verify selection
+Assert.assertEquals(driver.findElement(By.id("citySearch")).getAttribute("value"), "Colombo");
+```
+
+---
+
+## Q77. What is the Robot class? When to use it?
+
+```java
+import java.awt.Robot;
+import java.awt.event.KeyEvent;
+
+// Use ONLY for native OS dialogs that Selenium cannot handle
+Robot robot = new Robot();
+
+// Press Enter
+robot.keyPress(KeyEvent.VK_ENTER);
+robot.keyRelease(KeyEvent.VK_ENTER);
+
+// Type a string character by character
+for (char c : "test@email.com".toCharArray()) {
+    robot.keyPress(KeyEvent.getExtendedKeyCodeForChar(c));
+    robot.keyRelease(KeyEvent.getExtendedKeyCodeForChar(c));
+}
+
+// Drawbacks: OS-dependent, doesn't work headless, brittle screen coords
+// Prefer sendKeys for file uploads; use Robot only for true native OS dialogs
+```
+
+---
+
+## Q78. What is a flaky test? How do you handle it?
+
+A flaky test passes and fails intermittently without code changes.
+
+**Causes:** timing issues, shared test data, environment lag, StaleElementReferenceException, animation not finished.
+
+```java
+// Fix 1: Replace Thread.sleep with explicit waits
+wait.until(ExpectedConditions.visibilityOfElementLocated(By.id("result")));
+
+// Fix 2: RetryAnalyzer
+public class RetryAnalyzer implements IRetryAnalyzer {
+    private int count = 0;
+    private static final int MAX = 2;
+    @Override
+    public boolean retry(ITestResult result) {
+        if (!result.isSuccess() && count < MAX) { count++; return true; }
+        return false;
+    }
+}
+@Test(retryAnalyzer = RetryAnalyzer.class)
+public void flakyTest() { ... }
+
+// Fix 3: FluentWait ignoring StaleElementReferenceException
+new FluentWait<>(driver)
+    .withTimeout(Duration.ofSeconds(15))
+    .pollingEvery(Duration.ofMillis(300))
+    .ignoring(StaleElementReferenceException.class)
+    .until(d -> d.findElement(By.id("el")).isDisplayed());
+
+// Fix 4: Isolate test data — each test creates its own data
+// Fix 5: Investigate root cause — never rely on retry alone
+```
+
+---
+
+## Q79. How do you handle SSL certificate errors in Selenium?
+
+```java
+// Chrome
+ChromeOptions opts = new ChromeOptions();
+opts.setAcceptInsecureCerts(true);
+WebDriver driver = new ChromeDriver(opts);
+
+// Firefox
+FirefoxOptions ffOpts = new FirefoxOptions();
+ffOpts.setAcceptInsecureCerts(true);
+WebDriver driver = new FirefoxDriver(ffOpts);
+
+// Edge
+EdgeOptions edgeOpts = new EdgeOptions();
+edgeOpts.setAcceptInsecureCerts(true);
+WebDriver driver = new EdgeDriver(edgeOpts);
+
+// RemoteWebDriver
+ChromeOptions remoteOpts = new ChromeOptions();
+remoteOpts.setAcceptInsecureCerts(true);
+WebDriver driver = new RemoteWebDriver(new URL("http://grid:4444"), remoteOpts);
+```
+
+---
+
+## Q80. How do you capture browser console logs?
+
+```java
+// Chrome — enable log preferences
+ChromeOptions opts = new ChromeOptions();
+LoggingPreferences prefs = new LoggingPreferences();
+prefs.enable(LogType.BROWSER, Level.ALL);
+opts.setCapability("goog:loggingPrefs", prefs);
+WebDriver driver = new ChromeDriver(opts);
+
+// Retrieve logs
+LogEntries logs = driver.manage().logs().get(LogType.BROWSER);
+List<LogEntry> errors = logs.getAll().stream()
+    .filter(e -> e.getLevel().equals(Level.SEVERE))
+    .collect(Collectors.toList());
+Assert.assertTrue(errors.isEmpty(), "JS errors on page: " + errors);
+
+// Selenium 4 CDP approach
+DevTools devTools = ((ChromeDriver) driver).getDevTools();
+devTools.createSession();
+devTools.send(Log.enable());
+devTools.addListener(Log.entryAdded(), entry ->
+    System.out.println("CDP: " + entry.getText()));
+```
+
+---
+
+## Q81. How do you intercept network requests (Selenium 4 CDP)?
+
+```java
+ChromeDriver chrome = (ChromeDriver) driver;
+DevTools devTools = chrome.getDevTools();
+devTools.createSession();
+devTools.send(Network.enable(Optional.empty(), Optional.empty(), Optional.empty()));
+
+// Capture API responses
+List<String> apiCalls = new ArrayList<>();
+devTools.addListener(Network.responseReceived(), resp -> {
+    if (resp.getResponse().getUrl().contains("/api/")) {
+        apiCalls.add(resp.getResponse().getUrl() + " → " + resp.getResponse().getStatus());
+    }
+});
+
+// Block analytics
+devTools.send(Network.setBlockedURLs(Arrays.asList("*.analytics.com/*")));
+
+// Throttle network — simulate 3G
+devTools.send(Network.emulateNetworkConditions(
+    false, 100, 500_000, 100_000, Optional.empty()));
+
+driver.get("https://example.com/dashboard");
+System.out.println("API calls made: " + apiCalls);
+```
+
+---
+
+## Q82. What is the difference between getText() and getAttribute("value")?
+
+```java
+// getText() — returns visible text content (innerText) of the element
+// Works on: <p>, <div>, <span>, <button>, <td>, <h1>, etc.
+String btnLabel = driver.findElement(By.id("submit")).getText();  // "Submit"
+
+// getAttribute("value") — returns the VALUE property of form controls
+// Works on: <input>, <textarea>, <select>
+String inputVal = driver.findElement(By.id("email")).getAttribute("value");  // typed text
+
+// KEY RULE:
+// getText() on <input> → returns "" (inputs have no text content)
+// getAttribute("value") on <div> → returns null
+
+// For hidden element text use getAttribute("textContent") or "innerText"
+String hiddenText = element.getAttribute("textContent");
+```
+
+---
+
+## Q83. How do you verify element is visible vs present vs enabled?
+
+```java
+// isDisplayed() — in DOM AND visually rendered (not display:none, not opacity:0)
+boolean visible = element.isDisplayed();
+
+// isEnabled() — not disabled attribute
+boolean enabled = element.isEnabled();  // false if <button disabled>
+
+// isSelected() — for checkbox, radio, <option>
+boolean checked = driver.findElement(By.id("agree")).isSelected();
+
+// Presence — in DOM (may be hidden)
+boolean present = !driver.findElements(By.id("msg")).isEmpty();
+
+// Assertions
+Assert.assertTrue(submitBtn.isDisplayed(), "Button not visible");
+Assert.assertTrue(submitBtn.isEnabled(), "Button is disabled");
+Assert.assertFalse(checkbox.isSelected(), "Checkbox should be unchecked");
+```
+
+---
+
+## Q84. How do you handle elements that appear after a specific wait?
+
+```java
+// Trigger action, then wait for result element
+driver.findElement(By.id("loadBtn")).click();
+WebDriverWait wait = new WebDriverWait(driver, Duration.ofSeconds(15));
+WebElement results = wait.until(
+    ExpectedConditions.visibilityOfElementLocated(By.id("resultsTable")));
+
+// Wait for text to appear
+wait.until(ExpectedConditions.textToBePresentInElementLocated(
+    By.id("status"), "Completed"));
+
+// Wait for count to increase after click
+int before = driver.findElements(By.cssSelector(".card")).size();
+driver.findElement(By.id("loadMore")).click();
+wait.until(d -> d.findElements(By.cssSelector(".card")).size() > before);
+```
+
+---
+
+## Q85. What is Page Factory vs manual @FindBy initialization?
+
+```java
+// PageFactory — @FindBy with lazy proxy lookup
+public class LoginPage {
+    @FindBy(id = "username") private WebElement usernameField;
+
+    public LoginPage(WebDriver driver) {
+        PageFactory.initElements(driver, this);
+        // Field is found when first accessed, not here
+        // Risk: StaleElementReferenceException on dynamic SPA pages
+    }
+}
+
+// Manual By locators — findElement called on every interaction (always fresh)
+public class LoginPage {
+    private final By username = By.id("username");
+    private final WebDriver driver;
+
+    public LoginPage(WebDriver driver) { this.driver = driver; }
+
+    public void enterUsername(String user) {
+        driver.findElement(username).sendKeys(user);  // fresh lookup, never stale
+    }
+}
+
+// Recommendation:
+// PageFactory — fine for stable, simple HTML pages
+// Manual By — preferred for SPAs, React/Angular apps, AJAX-heavy pages
+```
+
+---
+
+## Q86. How do you implement a retry mechanism for flaky tests?
+
+```java
+// RetryAnalyzer
+public class RetryAnalyzer implements IRetryAnalyzer {
+    private int count = 0;
+    private static final int MAX = 2;
+
+    @Override
+    public boolean retry(ITestResult result) {
+        if (!result.isSuccess() && count < MAX) { count++; return true; }
+        return false;
+    }
+}
+
+// Apply globally via IAnnotationTransformer
+public class RetryTransformer implements IAnnotationTransformer {
+    @Override
+    public void transform(ITestAnnotation ann, Class tc, Constructor c, Method m) {
+        ann.setRetryAnalyzer(RetryAnalyzer.class);
+    }
+}
+// testng.xml: <listener class-name="com.utils.RetryTransformer"/>
+
+// Custom retry for single interactions
+public void clickWithRetry(By locator, int retries) {
+    for (int i = 0; i < retries; i++) {
+        try { driver.findElement(locator).click(); return; }
+        catch (StaleElementReferenceException | ElementClickInterceptedException e) {
+            if (i == retries - 1) throw e;
+        }
+    }
+}
+```
+
+---
+
+## Q87. What is the ExtentReport integration with Selenium?
+
+```java
+// ExtentManager.java (Singleton)
+public class ExtentManager {
+    private static ExtentReports extent;
+    public static ExtentReports getInstance() {
+        if (extent == null) {
+            ExtentSparkReporter spark = new ExtentSparkReporter("target/ExtentReport.html");
+            spark.config().setDocumentTitle("Test Report");
+            extent = new ExtentReports();
+            extent.attachReporter(spark);
+        }
+        return extent;
+    }
+}
+
+// BaseTest — create test node + attach screenshot on failure
+public class BaseTest {
+    protected ExtentTest test;
+
+    @BeforeMethod
+    public void setUp(Method method) {
+        test = ExtentManager.getInstance().createTest(method.getName());
+    }
+
+    @AfterMethod
+    public void tearDown(ITestResult result) {
+        if (result.getStatus() == ITestResult.FAILURE) {
+            test.fail(result.getThrowable());
+            String b64 = ((TakesScreenshot) DriverManager.getDriver())
+                .getScreenshotAs(OutputType.BASE64);
+            test.addScreenCaptureFromBase64String(b64, "Failure Screenshot");
+        } else {
+            test.pass("Test Passed");
+        }
+        DriverManager.removeDriver();
+        ExtentManager.getInstance().flush();
+    }
+}
+```
+
+---
+
+## Q88. What is Allure integration with Selenium (screenshot on failure)?
+
+```java
+// pom.xml: allure-testng dependency
+// testng.xml: <listener class-name="io.qameta.allure.testng.AllureTestNg"/>
+
+// Listener — attach screenshot on failure
+public class AllureListener implements ITestListener {
+    @Override
+    public void onTestFailure(ITestResult result) { attachScreenshot(); }
+
+    @Attachment(value = "Failure Screenshot", type = "image/png")
+    private byte[] attachScreenshot() {
+        return ((TakesScreenshot) DriverManager.getDriver())
+            .getScreenshotAs(OutputType.BYTES);
+    }
+}
+
+// Test with Allure annotations
+@Test
+@Description("Valid login shows dashboard")
+@Severity(SeverityLevel.CRITICAL)
+@Feature("Auth")
+public void loginTest() {
+    Allure.step("Open login page", () -> driver.get(baseUrl + "/login"));
+    Allure.step("Submit credentials", () -> {
+        driver.findElement(By.id("username")).sendKeys("admin");
+        driver.findElement(By.id("password")).sendKeys("Admin@123");
+        driver.findElement(By.id("loginBtn")).click();
+    });
+    Allure.step("Verify dashboard", () ->
+        Assert.assertTrue(driver.getTitle().contains("Dashboard")));
+}
+// allure serve target/allure-results
+```
+
+---
+
+## Q89. How do you design a framework from scratch?
+
+```
+automation-framework/
+├── pom.xml
+├── testng.xml
+└── src/test/
+    ├── java/
+    │   ├── base/
+    │   │   ├── BasePage.java       (abstract, waitHelpers)
+    │   │   └── BaseTest.java       (setUp/tearDown)
+    │   ├── pages/
+    │   │   ├── LoginPage.java
+    │   │   └── DashboardPage.java
+    │   ├── tests/
+    │   │   └── LoginTest.java
+    │   ├── utils/
+    │   │   ├── DriverManager.java  (ThreadLocal<WebDriver>)
+    │   │   ├── DriverFactory.java  (Chrome/Firefox/Edge)
+    │   │   ├── ConfigReader.java   (Singleton properties)
+    │   │   └── ExcelReader.java
+    │   └── listeners/
+    │       ├── FailureListener.java
+    │       └── RetryAnalyzer.java
+    └── resources/
+        ├── config.properties
+        └── testdata/
+```
+
+**Key decisions:**
+- `ThreadLocal<WebDriver>` for parallel safety
+- Abstract `BasePage` with shared helpers (`click`, `type`, `getText`)
+- `ConfigReader` Singleton for one-time property load
+- `DriverFactory` for browser-agnostic creation
+- ITestListener for screenshots on failure
+- TestNG RetryAnalyzer for flaky test resilience
+
+---
+
+## Q90. What is the BasePage abstract class pattern?
+
+```java
+public abstract class BasePage {
+    protected WebDriver driver;
+    protected WebDriverWait wait;
+    protected JavascriptExecutor js;
+
+    public BasePage(WebDriver driver) {
+        this.driver = driver;
+        this.wait   = new WebDriverWait(driver, Duration.ofSeconds(15));
+        this.js     = (JavascriptExecutor) driver;
+    }
+
+    protected void click(By locator) {
+        wait.until(ExpectedConditions.elementToBeClickable(locator)).click();
+    }
+    protected void type(By locator, String text) {
+        WebElement el = wait.until(ExpectedConditions.visibilityOfElementLocated(locator));
+        el.clear(); el.sendKeys(text);
+    }
+    protected String getText(By locator) {
+        return wait.until(ExpectedConditions.visibilityOfElementLocated(locator)).getText();
+    }
+    protected boolean isElementPresent(By locator) {
+        return !driver.findElements(locator).isEmpty();
+    }
+    protected void scrollTo(By locator) {
+        js.executeScript("arguments[0].scrollIntoView({block:'center'});",
+            driver.findElement(locator));
+    }
+    protected void jsClick(By locator) {
+        js.executeScript("arguments[0].click();", driver.findElement(locator));
+    }
+
+    public abstract boolean isLoaded();
+}
+```
+
+---
+
+## Q91. How do you read test data from Excel in Selenium?
+
+```java
+// Apache POI dependency: poi-ooxml
+public class ExcelReader {
+    public static Object[][] getData(String file, String sheet) throws IOException {
+        try (Workbook wb = new XSSFWorkbook(new FileInputStream(file))) {
+            Sheet s = wb.getSheet(sheet);
+            int rows = s.getPhysicalNumberOfRows();
+            int cols = s.getRow(0).getPhysicalNumberOfCells();
+            Object[][] data = new Object[rows - 1][cols];
+            for (int i = 1; i < rows; i++) {
+                Row row = s.getRow(i);
+                for (int j = 0; j < cols; j++) {
+                    Cell cell = row.getCell(j);
+                    data[i-1][j] = cell == null ? "" : switch (cell.getCellType()) {
+                        case STRING  -> cell.getStringCellValue();
+                        case NUMERIC -> String.valueOf((long) cell.getNumericCellValue());
+                        case BOOLEAN -> String.valueOf(cell.getBooleanCellValue());
+                        default -> "";
+                    };
+                }
+            }
+            return data;
+        }
+    }
+}
+
+@DataProvider(name = "loginData")
+public Object[][] loginData() throws IOException {
+    return ExcelReader.getData("src/test/resources/LoginData.xlsx", "Login");
+}
+
+@Test(dataProvider = "loginData")
+public void loginTest(String user, String pass, String expected) {
+    new LoginPage(DriverManager.getDriver()).login(user, pass);
+    Assert.assertEquals(getToastMessage(), expected);
+}
+```
+
+---
+
+## Q92. How do you implement a test data factory pattern?
+
+```java
+public class TestDataFactory {
+
+    public static TestUser validAdmin() {
+        return new TestUser.Builder("admin@qoria.com", "Admin@123")
+            .role("admin").active(true).build();
+    }
+
+    public static TestUser wrongPasswordUser() {
+        return new TestUser.Builder("admin@qoria.com", "wrongpass").build();
+    }
+
+    public static TestUser lockedUser() {
+        return new TestUser.Builder("locked@qoria.com", "Locked@123")
+            .locked(true).build();
+    }
+
+    public static TestUser randomUser() {
+        String ts = String.valueOf(System.currentTimeMillis());
+        return new TestUser.Builder("user" + ts + "@test.com", "Test@12345").build();
+    }
+}
+
+// Clean test methods
+@Test
+public void validLoginTest() {
+    TestUser u = TestDataFactory.validAdmin();
+    new LoginPage(DriverManager.getDriver()).login(u.getEmail(), u.getPassword());
+    Assert.assertTrue(new DashboardPage(DriverManager.getDriver()).isLoaded());
+}
+```
+
+---
+
+## Q93. What is the difference between @BeforeMethod and @BeforeClass in Selenium context?
+
+```java
+// @BeforeClass — runs ONCE before all tests in the class
+// Use for: shared session (login once, run all tests in class)
+public class SearchTest extends BaseTest {
+    @BeforeClass
+    public void loginOnce() {
+        new LoginPage(DriverManager.getDriver()).login("admin", "Admin@123");
+    }
+    @Test public void searchByName() { /* already logged in */ }
+    @Test public void searchByDate() { /* already logged in */ }
+}
+
+// @BeforeMethod — runs before EVERY @Test method
+// Use for: state reset, fresh navigation, clean test isolation
+public class LoginTest extends BaseTest {
+    @BeforeMethod
+    public void goToLoginPage() {
+        driver.get(baseUrl + "/login");
+        driver.manage().deleteAllCookies();
+    }
+    @Test public void validLoginTest()   { /* starts at /login */ }
+    @Test public void invalidLoginTest() { /* starts at /login */ }
+}
+
+// Execution order:
+// @BeforeSuite → @BeforeTest → @BeforeClass → @BeforeMethod → @Test
+//             → @AfterMethod → @AfterClass  → @AfterTest  → @AfterSuite
+```
+
+---
+
+## Q94. How do you handle a page that uses Angular/React (dynamic loading)?
+
+```java
+// SPAs rebuild DOM after data loads — use manual By locators (avoid PageFactory)
+
+// Wait for Angular stability
+WebDriverWait wait = new WebDriverWait(driver, Duration.ofSeconds(15));
+wait.until(d -> (Boolean) ((JavascriptExecutor) d)
+    .executeScript("return window.getAllAngularTestabilities().every(t=>t.isStable())"));
+
+// Wait for loading indicator to disappear
+wait.until(ExpectedConditions.invisibilityOfElementLocated(By.cssSelector(".loading")));
+
+// FluentWait ignoring stale references (common in SPAs)
+new FluentWait<>(driver)
+    .withTimeout(Duration.ofSeconds(15))
+    .pollingEvery(Duration.ofMillis(300))
+    .ignoring(StaleElementReferenceException.class)
+    .ignoring(NoSuchElementException.class)
+    .until(d -> d.findElement(By.id("content")).isDisplayed());
+```
+
+---
+
+## Q95. What is the difference between isDisplayed(), isEnabled(), isSelected()?
+
+```java
+// isDisplayed() — rendered and visible on screen (not hidden by CSS)
+element.isDisplayed();  // false if display:none or visibility:hidden
+
+// isEnabled() — can be interacted with (no disabled attribute)
+button.isEnabled();     // false if <button disabled>
+
+// isSelected() — for checkboxes, radio buttons, <option> elements
+checkbox.isSelected();  // true if checked
+
+// Practical use
+Assert.assertTrue(submitBtn.isDisplayed(), "Button not visible");
+Assert.assertTrue(submitBtn.isEnabled(),   "Button is disabled");
+Assert.assertFalse(agreeBox.isSelected(),  "Checkbox should start unchecked");
+```
+
+---
+
+## Q96. How do you verify tooltip text?
+
+```java
+// 1. title attribute
+String tooltip = driver.findElement(By.id("infoIcon")).getAttribute("title");
+Assert.assertEquals(tooltip, "Click for more information");
+
+// 2. aria-label
+String label = element.getAttribute("aria-label");
+
+// 3. Hover to trigger tooltip element, then read it
+Actions actions = new Actions(driver);
+actions.moveToElement(driver.findElement(By.id("infoIcon"))).perform();
+
+WebDriverWait wait = new WebDriverWait(driver, Duration.ofSeconds(5));
+String tooltipText = wait.until(
+    ExpectedConditions.visibilityOfElementLocated(By.cssSelector(".tooltip")))
+    .getText();
+Assert.assertEquals(tooltipText, "Required field");
+```
+
+---
+
+## Q97. How do you test responsive design with Selenium?
+
+```java
+int[][] viewports = {{375, 812}, {768, 1024}, {1366, 768}, {1920, 1080}};
+String[] labels   = {"Mobile", "Tablet", "Laptop", "Desktop"};
+
+for (int i = 0; i < viewports.length; i++) {
+    driver.manage().window().setSize(new Dimension(viewports[i][0], viewports[i][1]));
+    driver.navigate().refresh();
+
+    boolean hamburger = driver.findElement(By.id("hamburger")).isDisplayed();
+    boolean desktopNav = driver.findElement(By.id("desktopNav")).isDisplayed();
+
+    if (viewports[i][0] < 768) {
+        Assert.assertTrue(hamburger,   labels[i] + ": hamburger should show");
+        Assert.assertFalse(desktopNav, labels[i] + ": desktop nav should hide");
+    } else {
+        Assert.assertFalse(hamburger,  labels[i] + ": hamburger should hide");
+        Assert.assertTrue(desktopNav,  labels[i] + ": desktop nav should show");
+    }
+}
+```
+
+---
+
+## Q98. How do you set browser window size?
+
+```java
+driver.manage().window().maximize();                             // maximize
+driver.manage().window().fullscreen();                          // fullscreen
+driver.manage().window().setSize(new Dimension(1920, 1080));   // exact size
+driver.manage().window().setPosition(new Point(0, 0));         // position
+
+Dimension current = driver.manage().window().getSize();
+System.out.println(current.getWidth() + "x" + current.getHeight());
+
+driver.manage().window().minimize();  // Selenium 4
+
+// Headless — set via ChromeOptions (no screen)
+opts.addArguments("--headless=new", "--window-size=1920,1080");
+```
+
+---
+
+## Q99. How do you handle browser notifications (allow/block)?
+
+```java
+// Chrome — block notifications
+HashMap<String, Object> prefs = new HashMap<>();
+prefs.put("profile.default_content_setting_values.notifications", 2);  // 2=block, 1=allow
+ChromeOptions opts = new ChromeOptions();
+opts.setExperimentalOption("prefs", prefs);
+WebDriver driver = new ChromeDriver(opts);
+
+// Firefox — block notifications
+FirefoxOptions ffOpts = new FirefoxOptions();
+ffOpts.addPreference("permissions.default.desktop-notification", 2);
+
+// Selenium 4 CDP — grant permission for specific origin
+DevTools devTools = ((ChromeDriver) driver).getDevTools();
+devTools.createSession();
+devTools.send(Browser.grantPermissions(
+    Arrays.asList(PermissionType.NOTIFICATIONS),
+    Optional.of("https://example.com")));
+```
+
+---
+
+## Q100. Walk me through designing and running a Selenium test from scratch (end-to-end).
+
+**Scenario:** Verify a valid user can log in and reach the dashboard.
+
+### 1 — Project setup (pom.xml)
+```xml
+<dependencies>
+  <dependency>selenium-java 4.18.1</dependency>
+  <dependency>testng 7.9.0 scope=test</dependency>
+  <dependency>webdrivermanager 5.7.0</dependency>
+</dependencies>
+<build>
+  <plugins>
+    <plugin>maven-surefire-plugin: suiteXmlFiles=testng.xml</plugin>
+  </plugins>
+</build>
+```
+
+### 2 — config.properties (src/test/resources)
+```
+base.url=https://myapp.staging.com
+browser=chrome
+explicit.wait=15
+```
+
+### 3 — DriverFactory + DriverManager
+```java
+public class DriverFactory {
+    public static WebDriver createDriver(String browser) {
+        if ("chrome".equals(browser)) {
+            WebDriverManager.chromedriver().setup();
+            return new ChromeDriver(new ChromeOptions().addArguments("--start-maximized"));
+        }
+        throw new IllegalArgumentException(browser);
+    }
+}
+
+public class DriverManager {
+    private static final ThreadLocal<WebDriver> tl = new ThreadLocal<>();
+    public static void set(WebDriver d)  { tl.set(d); }
+    public static WebDriver get()        { return tl.get(); }
+    public static void remove()          { tl.get().quit(); tl.remove(); }
+}
+```
+
+### 4 — BasePage
+```java
+public abstract class BasePage {
+    protected WebDriver driver;
+    protected WebDriverWait wait;
+    public BasePage(WebDriver d) {
+        this.driver = d;
+        this.wait = new WebDriverWait(d, Duration.ofSeconds(15));
+    }
+    protected void click(By l)            { wait.until(elementToBeClickable(l)).click(); }
+    protected void type(By l, String t)   { wait.until(visibilityOf(l)).clear(); wait.until(visibilityOf(l)).sendKeys(t); }
+    protected String getText(By l)        { return wait.until(visibilityOf(l)).getText(); }
+    public abstract boolean isLoaded();
+
+    private WebElement visibilityOf(By l) { return wait.until(ExpectedConditions.visibilityOfElementLocated(l)); }
+    private WebElement elementToBeClickable(By l) { return wait.until(ExpectedConditions.elementToBeClickable(l)); }
+}
+```
+
+### 5 — Page Objects
+```java
+public class LoginPage extends BasePage {
+    private By username = By.id("username");
+    private By password = By.id("password");
+    private By loginBtn = By.cssSelector("button[type='submit']");
+
+    public LoginPage(WebDriver d) { super(d); }
+
+    public DashboardPage login(String user, String pass) {
+        driver.get(ConfigReader.get("base.url") + "/login");
+        type(username, user); type(password, pass); click(loginBtn);
+        return new DashboardPage(driver);
+    }
+    @Override public boolean isLoaded() { return !driver.findElements(username).isEmpty(); }
+}
+
+public class DashboardPage extends BasePage {
+    private By welcome = By.id("welcomeMsg");
+    public DashboardPage(WebDriver d) { super(d); }
+    public String getWelcomeText() { return getText(welcome); }
+    @Override public boolean isLoaded() { return !driver.findElements(welcome).isEmpty(); }
+}
+```
+
+### 6 — BaseTest
+```java
+public class BaseTest {
+    @BeforeMethod
+    public void setUp() {
+        DriverManager.set(DriverFactory.createDriver(ConfigReader.get("browser", "chrome")));
+    }
+    @AfterMethod
+    public void tearDown(ITestResult result) {
+        if (result.getStatus() == ITestResult.FAILURE) {
+            // take screenshot...
+        }
+        DriverManager.remove();
+    }
+}
+```
+
+### 7 — Test
+```java
+public class LoginTest extends BaseTest {
+    @Test(description = "Valid login should show dashboard")
+    public void validLoginShowsDashboard() {
+        DashboardPage dash = new LoginPage(DriverManager.get())
+            .login("admin@qoria.com", "Admin@123");
+        Assert.assertTrue(dash.isLoaded(), "Dashboard did not load");
+        Assert.assertTrue(dash.getWelcomeText().contains("Welcome"), "Welcome text missing");
+    }
+}
+```
+
+### 8 — testng.xml
+```xml
+<suite name="Regression" parallel="methods" thread-count="4">
+  <listeners><listener class-name="com.listeners.FailureListener"/></listeners>
+  <test name="Login">
+    <classes><class name="com.tests.LoginTest"/></classes>
+  </test>
+</suite>
+```
+
+### 9 — Run
+```bash
+mvn clean test -Dbrowser=chrome -Dsurefire.suiteXmlFiles=testng.xml
+# Report: target/ExtentReport.html
+# Allure: allure serve target/allure-results
+```
+
+---
+
+*End of Part 4 — Selenium WebDriver | 100 Questions*
