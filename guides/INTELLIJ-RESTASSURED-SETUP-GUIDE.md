@@ -2258,4 +2258,465 @@ matchesJsonSchemaInClasspath("schemas/post-schema.json")
 
 ---
 
-*Setup Guide — IntelliJ IDEA + RestAssured + TestNG | JSON Schema Validation | Classpath Setup*
+---
+
+## PART 9 — TEST REPORTING (COMPLETE GUIDE)
+
+Three reporting options — from simplest to most professional:
+
+```
+Option A: Maven Surefire HTML Report   → zero setup, built-in, good enough
+Option B: TestNG Built-in Report       → zero setup, slightly nicer
+Option C: Allure Report                → requires setup, most professional
+```
+
+---
+
+### OPTION A — Maven Surefire Report (Zero Setup — Already Works)
+
+Every time you run `mvn test`, Maven automatically generates an HTML report.
+
+**Location after running:**
+```
+target/
+└── surefire-reports/
+    ├── index.html             ← OPEN THIS in browser
+    ├── TestSuite.html
+    └── TEST-TestSuite.xml     ← JUnit XML (used by CI tools like Jenkins)
+```
+
+**How to open in IntelliJ:**
+```
+1. In the project panel (left side), expand:
+   target → surefire-reports → index.html
+
+2. Right-click index.html → Open In → Browser → Chrome (or any browser)
+
+3. You see: test class names, method names, pass/fail, duration
+```
+
+**How to open from PowerShell:**
+```powershell
+# Windows — open in default browser
+start target/surefire-reports/index.html
+
+# Or navigate manually:
+# C:\Users\Kupeshanth\Desktop\Rest APi Sample\target\surefire-reports\index.html
+```
+
+**What the Surefire report shows:**
+```
+✅ Test suite name
+✅ Total tests run: 79
+✅ Failures: 0 / Errors: 0 / Skipped: 0
+✅ Each test class (GetTests, PostTests, etc.)
+✅ Each test method with pass/fail status
+✅ Duration for each test
+✅ Error messages for any failures
+❌ No screenshots
+❌ No request/response details
+❌ No trend history
+```
+
+---
+
+### OPTION B — TestNG Built-in Report (Zero Setup)
+
+TestNG also generates its own HTML report automatically.
+
+**Location after running:**
+```
+test-output/
+├── index.html              ← TestNG report
+├── emailable-report.html   ← simple report for email
+└── testng-results.xml
+```
+
+**How to open:**
+```
+In IntelliJ: expand test-output → right-click index.html → Open In → Browser
+
+OR in PowerShell:
+start test-output/index.html
+```
+
+**What it shows:**
+```
+✅ Suite name, test group names
+✅ Pass/Fail/Skip counts
+✅ Each test method with status
+✅ Failed test error messages
+✅ Configuration methods (@BeforeClass etc.)
+❌ No screenshots
+❌ No step-by-step breakdown
+```
+
+---
+
+### OPTION C — Allure Report (Most Professional — Requires Setup)
+
+Allure is the industry standard for Java test reports. It shows step-by-step execution, request/response logs, and trend history.
+
+**What Allure report shows (compared to Surefire):**
+```
+✅ Pass/Fail/Skip with visual pie chart
+✅ Each test with step-by-step breakdown
+✅ Request and response logged per test (with AllureRestAssured)
+✅ Severity levels (Critical, Normal, Minor)
+✅ Links to JIRA tickets
+✅ Screenshots (for Selenium tests)
+✅ History trend across runs
+✅ Categories (infrastructure failures, product defects)
+```
+
+---
+
+#### STEP 1 — Add Allure to pom.xml
+
+Open `pom.xml` and add inside `<dependencies>`:
+
+```xml
+<!-- Allure TestNG integration -->
+<dependency>
+    <groupId>io.qameta.allure</groupId>
+    <artifactId>allure-testng</artifactId>
+    <version>2.24.0</version>
+    <scope>test</scope>
+</dependency>
+
+<!-- Allure RestAssured: logs every request+response into the report -->
+<dependency>
+    <groupId>io.qameta.allure</groupId>
+    <artifactId>allure-rest-assured</artifactId>
+    <version>2.24.0</version>
+    <scope>test</scope>
+</dependency>
+```
+
+Also add inside `<build><plugins>`:
+
+```xml
+<!-- Allure Maven plugin: generates the report -->
+<plugin>
+    <groupId>io.qameta.allure</groupId>
+    <artifactId>allure-maven</artifactId>
+    <version>2.12.0</version>
+    <configuration>
+        <reportVersion>2.24.0</reportVersion>
+    </configuration>
+</plugin>
+```
+
+After adding → click **↻ Reload Maven** in IntelliJ.
+
+---
+
+#### STEP 2 — Add Allure to BaseTest.java
+
+Add one line to `setUp()` in `BaseTest.java`:
+
+```java
+@BeforeClass
+public void setUp() {
+    RestAssured.baseURI = ApiConstants.BASE_URL;
+    RestAssured.enableLoggingOfRequestAndResponseIfValidationFails();
+
+    // ↓ ADD THIS LINE — logs every request + response into Allure report
+    RestAssured.filters(new io.qameta.allure.restassured.AllureRestAssured());
+
+    requestSpec = new RequestSpecBuilder()
+        .setContentType(ContentType.JSON)
+        .setAccept(ContentType.JSON)
+        .build();
+    // ... rest of setUp
+}
+```
+
+**Add the import at top of BaseTest.java:**
+```java
+import io.qameta.allure.restassured.AllureRestAssured;
+```
+
+---
+
+#### STEP 3 — Add Allure Annotations to Tests (Optional but Powerful)
+
+```java
+import io.qameta.allure.*;
+
+@Epic("Posts API")                    // top-level grouping
+@Feature("GET Requests")              // feature group
+public class GetTests extends BaseTest {
+
+    @Story("Get All Posts")           // user story
+    @Severity(SeverityLevel.CRITICAL) // BLOCKER, CRITICAL, NORMAL, MINOR, TRIVIAL
+    @Description("Verify GET /posts returns 200 with 100 items")
+    @Test
+    public void getAllPosts_returns200_with100Items() {
+        // test code...
+    }
+
+    @Story("Get Single Post")
+    @Severity(SeverityLevel.NORMAL)
+    @Link(name = "JIRA", url = "https://jira.company.com/PROJ-123")
+    @Test
+    public void getPostById_validId_returns200() {
+        // test code...
+    }
+}
+```
+
+---
+
+#### STEP 4 — Run Tests (Generates allure-results folder)
+
+```powershell
+# Run all tests — creates allure-results/ in project root
+./apache-maven-3.9.6/bin/mvn test
+
+# After running you will see:
+# allure-results/         ← raw data files (JSON)
+# target/surefire-reports/ ← Surefire report still generated too
+```
+
+---
+
+#### STEP 5 — Install Allure CLI (one time)
+
+```powershell
+# Option A: Via Chocolatey (run PowerShell as Admin)
+choco install allure
+
+# Option B: Via Scoop
+scoop install allure
+
+# Option C: Download manually
+# Go to: https://github.com/allure-framework/allure2/releases
+# Download allure-X.X.X.zip → extract → add bin/ to PATH
+
+# Verify installation:
+allure --version    # should show version number
+```
+
+---
+
+#### STEP 6 — Generate and Open the Allure Report
+
+```powershell
+# Option A: Serve report live in browser (recommended)
+allure serve allure-results/
+# Opens browser automatically at http://localhost:XXXX/
+
+# Option B: Generate static HTML files first, then open
+allure generate allure-results/ --clean -o allure-report/
+allure open allure-report/
+
+# Option C: Via Maven plugin (no separate Allure install needed)
+./apache-maven-3.9.6/bin/mvn allure:serve
+```
+
+---
+
+### HOW TO VIEW REPORTS IN INTELLIJ
+
+**Surefire report:**
+```
+Project panel → target → surefire-reports → index.html
+Right-click → Open In → Browser → Chrome
+```
+
+**TestNG report:**
+```
+Project panel → test-output → index.html
+Right-click → Open In → Browser → Chrome
+```
+
+**Allure report:**
+```
+Run in terminal (View → Tool Windows → Terminal):
+allure serve allure-results/
+
+IntelliJ opens a browser tab automatically
+```
+
+**IntelliJ built-in test runner (fastest for development):**
+```
+When you right-click a test → Run → IntelliJ shows results in the
+Run panel at the bottom with green ✓ and red ✗ inline
+No browser needed for quick feedback
+```
+
+---
+
+### WHAT THE REPORTS LOOK LIKE
+
+**Surefire (index.html):**
+```
+Test Suite: REST API Test Suite
+Tests run: 79 | Failures: 0 | Errors: 0 | Skipped: 0
+Time elapsed: 32.13 s
+
+GET Tests:
+  ✓ getAllPosts_returns200_with100Items    0.8s
+  ✓ getPostById_validId_returns200        0.3s
+  ✓ getPostsByUserId_returns10Posts       0.4s
+  ✗ someFailingTest                       0.2s  ← red, shows error
+
+POST Tests:
+  ✓ createPost_validData_returns201       1.1s
+  ...
+```
+
+**Allure (browser):**
+```
+Dashboard:
+  ○ 79 passed (green)
+  ● 0 failed
+  
+Suites tab:
+  Posts API
+    GET Requests
+      ✓ Get All Posts          [Request: GET /posts] [Response: 200 ←100 items]
+      ✓ Get Single Post        [Request: GET /posts/1] [Response: 200 ←{id:1...}]
+      
+Graphs tab:
+  Test duration distribution
+  Pass/fail trend over last 10 runs
+```
+
+---
+
+### COMPLETE REPORTING COMMANDS REFERENCE
+
+```powershell
+# ── SUREFIRE (built-in, no setup) ─────────────────────────────────────────────
+./apache-maven-3.9.6/bin/mvn test                           # run + generate report
+start target/surefire-reports/index.html                    # open report
+
+# ── TESTNG (built-in, no setup) ───────────────────────────────────────────────
+./apache-maven-3.9.6/bin/mvn test                           # run + generate report
+start test-output/index.html                                # open TestNG report
+
+# ── ALLURE (requires setup — see above) ───────────────────────────────────────
+./apache-maven-3.9.6/bin/mvn test                           # run tests (generates allure-results/)
+allure serve allure-results/                                # serve live report in browser
+allure generate allure-results/ --clean -o allure-report/  # generate static HTML
+allure open allure-report/                                  # open generated HTML
+./apache-maven-3.9.6/bin/mvn allure:serve                  # Maven plugin (no Allure CLI needed)
+
+# ── CHECK REPORT WAS GENERATED ────────────────────────────────────────────────
+ls allure-results/      # should show .json files after test run
+ls test-output/         # should show index.html after test run
+ls target/surefire-reports/  # should show index.html after test run
+```
+
+---
+
+### QUICK RECOMMENDATION
+
+| Situation | Use |
+|-----------|-----|
+| Quick local check during development | IntelliJ run panel (right-click → Run) |
+| Share results with your team | Surefire HTML: `target/surefire-reports/index.html` |
+| Interview/assessment demo | Surefire HTML — already generated, no extra steps |
+| Professional project report | Allure — full request/response logs, trends |
+| CI/CD (Jenkins/GitHub Actions) | Allure via Maven plugin or Surefire XML |
+
+**For your assessment:** After running `mvn test`, just open `target/surefire-reports/index.html` in Chrome. No extra setup needed. That's what interviewers expect to see.
+
+---
+
+---
+
+## FINAL 3 STEPS — Run Tests and See Your Report
+
+### Step 1 — Run all tests
+
+```powershell
+cd "c:\Users\Kupeshanth\Desktop\Rest APi Sample"
+./apache-maven-3.9.6/bin/mvn test
+```
+
+Expected output:
+```
+[INFO] Tests run: 79, Failures: 0, Errors: 0, Skipped: 0
+[INFO] BUILD SUCCESS
+```
+
+---
+
+### Step 2 — Open the HTML report
+
+```powershell
+# Open in browser (Windows)
+start target/surefire-reports/index.html
+
+# OR navigate manually in Windows Explorer:
+# This PC → Desktop → Rest APi Sample → target → surefire-reports → index.html
+# Double-click index.html → opens in Chrome
+```
+
+In IntelliJ — without terminal:
+```
+1. Look at the project panel on the left
+2. Expand: target → surefire-reports
+3. Right-click index.html → Open In → Browser → Chrome
+```
+
+---
+
+### Step 3 — Read the Report
+
+```
+The report shows:
+
+TOP SECTION:
+  Test Suite:   REST API Test Suite
+  Tests:        79 total
+  Failures:     0
+  Errors:       0
+  Skipped:      0
+  Time:         32 seconds
+
+DETAIL SECTION (scroll down):
+  GET Tests group:
+    ✓ getAllPosts_returns200_with100Items      0.8s   PASS
+    ✓ getPostById_validId_returns200          0.3s   PASS
+    ✓ getPostsByUserId_returns10Posts         0.4s   PASS
+    ✓ getPost_nonExistentId_returns404        0.2s   PASS
+    ✗ someFailingTest                         0.1s   FAIL ← red, shows error message
+
+  POST Tests group:
+    ✓ createPost_validData_returns201         1.1s   PASS
+    ...
+
+  DELETE Tests group:
+    ✓ delete_existingPost_returns200          0.5s   PASS
+    ...
+
+FAILED TEST DETAIL (click on any red test):
+  Expected status code <200> but was <404>
+  JSON path: title doesn't match
+  Expected: Hello
+  Actual:   World
+```
+
+---
+
+### For Allure Report (Professional) — 3 extra steps after mvn test
+
+```powershell
+# Step A: Install Allure CLI (one time only)
+choco install allure      # run PowerShell as Admin
+
+# Step B: Run your tests (already done above)
+./apache-maven-3.9.6/bin/mvn test
+
+# Step C: Open the Allure report in browser
+allure serve allure-results/
+# Browser opens automatically — much nicer than Surefire
+```
+
+---
+
+*Setup Guide — IntelliJ IDEA + RestAssured + TestNG | Complete: Setup → Tests → Reporting*
