@@ -1871,5 +1871,332 @@ WebElement element = driver.findElement(By.id("chart"));
 File shot = element.getScreenshotAs(OutputType.FILE);  // screenshot of just this element
 ```
 
-*Last updated: Senior QA Interview Preparation*
+---
+
+## SECTION — TEST REPORTING FOR SELENIUM + TESTNG
+
+---
+
+### Three Reporting Options
+
+```
+Option A: Maven Surefire Report   → zero setup, auto-generated, good enough
+Option B: TestNG Built-in Report  → zero setup, slightly nicer layout
+Option C: Allure Report           → setup needed, most professional, industry standard
+```
+
+---
+
+### OPTION A — Maven Surefire Report (Zero Setup)
+
+**How it works:** Every `mvn test` run automatically generates HTML and XML reports.
+
+**Location:**
+```
+target/
+└── surefire-reports/
+    ├── index.html             ← OPEN THIS in browser
+    ├── TEST-TestSuite.xml     ← JUnit XML (for Jenkins/GitHub Actions)
+    └── TestSuite.txt          ← plain text log
+```
+
+**How to open:**
+```powershell
+# Windows PowerShell
+start target/surefire-reports/index.html
+
+# From IntelliJ — no terminal needed:
+# Left panel → target → surefire-reports → index.html
+# Right-click → Open In → Browser → Chrome
+```
+
+**What it shows:**
+```
+Test Suite:  REST API Test Suite
+Tests:       26   Failures: 0   Errors: 0   Skipped: 0
+Time:        18.4s
+
+LoginTest:
+  ✓ validLogin_redirectsToDashboard    1.2s
+  ✓ wrongPassword_showsError           0.8s
+
+CheckoutTest:
+  ✓ addToCart_itemAppearsInCart        2.1s
+  ✗ checkout_withExpiredCard           0.3s  ← FAIL (click here for error)
+```
+
+---
+
+### OPTION B — TestNG Built-in Report (Zero Setup)
+
+**Location:**
+```
+test-output/
+├── index.html              ← TestNG dashboard
+├── emailable-report.html   ← simple one-page report for email/sharing
+└── testng-results.xml
+```
+
+**How to open:**
+```powershell
+start test-output/index.html
+start test-output/emailable-report.html   # simpler, best for sharing
+```
+
+**What it shows:**
+```
+Suite: Selenium Test Suite
+Total: 26   Passed: 25   Failed: 1   Skipped: 0
+
+Groups:
+  smoke:      10 tests   All passed ✓
+  regression: 16 tests   1 failed ✗
+
+LoginTest (8 tests):
+  validLogin_redirectsToDashboard     PASS   1.2s
+  wrongPassword_showsError            PASS   0.8s
+  emptyUsername_showsValidation       PASS   0.4s
+```
+
+---
+
+### OPTION C — Allure Report (Professional — Most Used in Enterprise)
+
+Allure shows: step-by-step execution, screenshots on failure, request/response logs, trend history, severity levels.
+
+#### STEP 1 — Add to pom.xml
+
+```xml
+<!-- Inside <dependencies> -->
+<dependency>
+    <groupId>io.qameta.allure</groupId>
+    <artifactId>allure-testng</artifactId>
+    <version>2.24.0</version>
+    <scope>test</scope>
+</dependency>
+
+<!-- Inside <build><plugins> -->
+<plugin>
+    <groupId>io.qameta.allure</groupId>
+    <artifactId>allure-maven</artifactId>
+    <version>2.12.0</version>
+    <configuration>
+        <reportVersion>2.24.0</reportVersion>
+    </configuration>
+</plugin>
+```
+
+Refresh Maven after adding: IntelliJ → Maven panel → ↻
+
+#### STEP 2 — Add Allure Annotations to Tests
+
+```java
+import io.qameta.allure.*;
+import io.qameta.allure.testng.AllureTestNg;
+
+@Epic("Login Feature")                  // top-level grouping
+@Feature("Authentication")             // sub-group
+public class LoginTest extends BaseTest {
+
+    @Story("Valid Login")
+    @Severity(SeverityLevel.CRITICAL)   // BLOCKER, CRITICAL, NORMAL, MINOR, TRIVIAL
+    @Description("Verify valid credentials redirect to dashboard")
+    @Test
+    public void validLogin_redirectsToDashboard() {
+        Allure.step("Navigate to login page", () -> {
+            driver.get("https://app.com/login");
+        });
+
+        Allure.step("Enter valid credentials", () -> {
+            driver.findElement(By.id("username")).sendKeys("admin");
+            driver.findElement(By.id("password")).sendKeys("Admin@123");
+        });
+
+        Allure.step("Click login button", () -> {
+            driver.findElement(By.id("loginBtn")).click();
+        });
+
+        Allure.step("Verify dashboard is shown", () -> {
+            Assert.assertTrue(driver.getCurrentUrl().contains("/dashboard"));
+        });
+    }
+
+    @Story("Invalid Login")
+    @Severity(SeverityLevel.NORMAL)
+    @Link(name = "JIRA Ticket", url = "https://jira.company.com/LOGIN-123")
+    @Test
+    public void wrongPassword_showsError() {
+        // test code
+    }
+}
+```
+
+#### STEP 3 — Auto Screenshot on Failure (Attaches to Allure Report)
+
+```java
+// Add to your TestListener class:
+public class TestListener implements ITestListener {
+
+    @Override
+    public void onTestFailure(ITestResult result) {
+        Object testInstance = result.getInstance();
+        WebDriver driver = ((BaseTest) testInstance).getDriver();
+
+        // Attach screenshot to Allure report
+        byte[] screenshot = ((TakesScreenshot) driver)
+            .getScreenshotAs(OutputType.BYTES);
+
+        Allure.getLifecycle().addAttachment(
+            "Screenshot on Failure",   // name shown in report
+            "image/png",               // type
+            "png",                     // extension
+            screenshot
+        );
+
+        // Also attach page source for debugging
+        Allure.getLifecycle().addAttachment(
+            "Page Source",
+            "text/html",
+            "html",
+            driver.getPageSource().getBytes()
+        );
+    }
+}
+```
+
+Register the listener in testng.xml:
+```xml
+<suite name="Suite">
+    <listeners>
+        <listener class-name="listeners.TestListener"/>
+    </listeners>
+    ...
+</suite>
+```
+
+#### STEP 4 — Run Tests (Generates allure-results/)
+
+```powershell
+mvn test
+# OR
+./apache-maven-3.9.6/bin/mvn test
+
+# After run:
+# allure-results/   ← raw JSON data (created automatically)
+# target/surefire-reports/  ← Surefire report (also created)
+```
+
+#### STEP 5 — Install Allure CLI
+
+```powershell
+# Option A: Chocolatey (run PowerShell as Admin)
+choco install allure
+
+# Option B: Scoop
+scoop install allure
+
+# Option C: Manual download
+# https://github.com/allure-framework/allure2/releases
+# Download allure-X.X.X.zip → extract to C:\tools\allure
+# Add C:\tools\allure\bin to PATH
+
+# Verify:
+allure --version   # should show version number
+```
+
+#### STEP 6 — Generate and Open Allure Report
+
+```powershell
+# Open live server (best — opens browser automatically)
+allure serve allure-results/
+
+# Generate static files then open
+allure generate allure-results/ --clean -o allure-report/
+allure open allure-report/
+
+# Via Maven plugin (no Allure CLI needed)
+./apache-maven-3.9.6/bin/mvn allure:serve
+```
+
+---
+
+### What Allure Report Shows
+
+```
+Dashboard:
+  ○ 25 passed   ● 1 failed   ○ 0 skipped
+  Pie chart + trend graph
+
+Suites tab:
+  Login Feature
+    Authentication
+      ✓ Valid Login → CRITICAL → 1.8s
+        Steps:
+          → Navigate to login page      ✓
+          → Enter valid credentials     ✓
+          → Click login button          ✓
+          → Verify dashboard is shown   ✓
+
+      ✗ Wrong Password → NORMAL → 0.3s
+        Steps:
+          → Navigate to login page      ✓
+          → Enter wrong credentials     ✓
+          → Click login button          ✓
+          → Verify error message        ✗  ← FAILED HERE
+        Screenshot: [attached image]
+        Error: Expected "Invalid credentials" but was "Something went wrong"
+
+Graphs tab:
+  - Test duration distribution
+  - Pass/fail trend across last 10 runs
+```
+
+---
+
+### All Reporting Commands — Quick Reference
+
+```powershell
+# ── SUREFIRE (auto-generated) ─────────────────────────────────────────────────
+mvn test
+start target/surefire-reports/index.html
+
+# ── TESTNG (auto-generated) ───────────────────────────────────────────────────
+mvn test
+start test-output/index.html
+start test-output/emailable-report.html
+
+# ── ALLURE ────────────────────────────────────────────────────────────────────
+mvn test                                                    # generates allure-results/
+allure serve allure-results/                                # live server (best)
+allure generate allure-results/ --clean -o allure-report/  # static HTML
+allure open allure-report/                                  # open static HTML
+mvn allure:serve                                            # via Maven plugin
+
+# ── OPEN IN IntelliJ (no terminal needed) ─────────────────────────────────────
+# target → surefire-reports → index.html → right-click → Open In → Browser
+# test-output → index.html → right-click → Open In → Browser
+```
+
+---
+
+### Q: What reporting do you use in your automation framework?
+
+```
+In my current projects I use two levels of reporting:
+
+1. Maven Surefire for quick CI checks — it generates HTML and JUnit XML automatically.
+   Jenkins/GitHub Actions reads the XML to show pass/fail in the pipeline dashboard.
+
+2. Allure for detailed debugging and stakeholder reporting.
+   It captures step-by-step execution, screenshots on failure, and request/response
+   logs (when AllureRestAssured filter is added to RestAssured setup).
+   The trend graph shows if pass rate is improving over sprints.
+
+For my Selenium framework specifically, I implemented a TestNG ITestListener
+that attaches a screenshot to the Allure report automatically when any test fails.
+This means when a developer asks "why did this test fail?", I can show them
+the exact screenshot from the moment of failure without them running the test again.
+```
+
+*Last updated: Senior QA Interview Preparation | Reporting: Surefire + TestNG + Allure*
 *GitHub: https://github.com/kupeshanth/RestApiQA/guides/01-SELENIUM-COMPLETE-GUIDE.md*
