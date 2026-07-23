@@ -1533,7 +1533,7 @@ mvn test 2>&1 | Select-String "Tests run|BUILD|FAIL"
 
 ## 16. Your CV — Personalized Talking Points & STAR Answers
 
-> These are built directly from your CV (Kupeshanth Kupenthiran).
+> These are built directly from your actual CV (Kupeshanth Kupenthiran).
 > Learn these cold — they are YOUR stories, told well.
 
 ---
@@ -1541,18 +1541,24 @@ mvn test 2>&1 | Select-String "Tests run|BUILD|FAIL"
 ### Your Experience Summary (say this when asked "Tell me about yourself")
 
 ```
-"I'm a QA Engineer currently at Qoria Lanka, where I work on automation testing
-using Selenium, TestNG, and Playwright for an EdTech platform. Before that I interned
-at Cerexio as a QA Engineer where I did manual and automated testing of Angular
-applications with Postman for API testing.
+"I'm a Trainee Quality Engineer currently at Qoria Lanka, working on the EdTech
+Insight project. I write Selenium and TestNG automation in Java, Playwright UI tests
+in JavaScript, and I've been working on MCP and Agent integrations as part of
+AI-augmented testing workflows. Our tests run through GitHub Actions pipelines with
+GCP-triggered executions for deployment validation.
 
-I have hands-on experience across the full testing spectrum — manual, automation,
-API, and performance testing — with tools like Selenium, Cypress, Playwright, RestAssured,
-JMeter, and Postman. I've worked in Agile teams, contributed to CI/CD pipelines using
-GitHub Actions and Jenkins, and I have a B.Sc. in IT from University of Moratuwa.
+Before Qoria, I worked at Cerexio as an Intern Software Engineer and QA Engineer
+for six months — manual and automated testing of Angular PrimeNG enterprise applications,
+API testing with Postman, defect tracking in JIRA, and Agile collaboration with
+development teams.
 
-I'm particularly interested in this role because it aligns with my automation background
-and gives me the opportunity to work at scale on a product used by many people daily."
+I have a B.Sc. Honours in Information Technology and Management from the University
+of Moratuwa. My final year project is an AI-powered Diabetic Retinopathy Detection
+System — Python, Machine Learning, NLP, and React — which shaped how I think about
+non-binary quality metrics beyond simple pass/fail.
+
+I'm looking for a role where I can deepen my automation craft and contribute to
+quality from the beginning of the feature lifecycle, not just at the end."
 ```
 
 ---
@@ -1563,14 +1569,16 @@ The JD asks for 3+ years. You have ~1.5 years combined. Here's how to address it
 
 ```
 "My total professional QA experience is about 1.5 years — an internship at Cerexio
-and my current role at Qoria. That said, I've moved quickly: I went from manual testing
-to building automation frameworks with Selenium and Playwright, integrating them with
-GitHub Actions CI/CD, and contributing to test strategy for a live EdTech product.
+(March to September 2024) and my current role at Qoria Lanka (September 2025 to present).
+That said, the quality of the exposure has been dense: I moved from manual testing to
+building automation frameworks with Selenium, TestNG, and Playwright, integrating them
+into GitHub Actions CI/CD pipelines, and working on MCP and Agent integrations that
+most QA engineers at any experience level haven't had yet.
 
 I'm aware this role asks for 3+ years and I want to be transparent about where I am.
-What I can offer is strong fundamentals, hands-on automation experience across multiple
-tools, and the ability to learn fast — I built RestAssured automation from scratch this
-week as part of my own preparation for interviews like this one.
+What I can offer is strong fundamentals, hands-on automation experience on real shipped
+products, and the ability to learn fast. I've built frameworks rather than just used
+them — which means I understand the architecture, not just the scripts.
 
 I'd rather be honest and let my work speak than overstate my years."
 ```
@@ -1584,23 +1592,25 @@ I'd rather be honest and let my work speak than overstate my years."
 **Q: Tell me about an automation framework you built.**
 
 ```
-Situation: At Qoria Lanka, the EdTech Insight project needed a reliable automated
-test suite. Manual testing was slowing down releases.
+Situation: In my Singer Page Testing project, there was no automation — all testing
+was manual. Regression took significant time before any release.
 
-Task: I was tasked with contributing to designing and maintaining automated test
-suites using Selenium and TestNG.
+Task: Build a maintainable automation framework that non-technical stakeholders
+could understand — reports readable without reading code.
 
-Action: I helped structure the framework using Page Object Model — separating page
-locators from test logic. I wrote tests covering critical flows, integrated them with
-GitHub Actions so tests ran on every push, and used GCP-triggered pipelines for
-deployment validation. I also worked with Playwright for additional automation coverage.
+Action: I chose Serenity BDD with Cucumber and Java. Feature files in Gherkin
+(readable by anyone), step definitions mapping Gherkin to Selenium WebDriver actions,
+page objects for each key page of the Singer website. Serenity auto-generates HTML
+reports with screenshots at each step — product owners can read these without
+opening code. I documented the setup so the suite ran with a single Maven command.
 
-Result: The team had automated regression running in CI on every code change,
-reducing manual regression time and catching regressions before they reached production.
+A challenge: Singer's navigation menu was JavaScript-rendered. My initial CSS
+selectors broke in different load states. I switched to XPath targeting text content
+and added explicit waits — made the tests stable.
 
-[If asked about RestAssured specifically]:
-"I've recently been building RestAssured API automation independently — I can walk
-you through the framework I've built if helpful."
+Result: Core user journeys automated. Non-technical stakeholders could verify
+coverage from Serenity reports. My first complete framework build — it gave me
+confidence in making architecture decisions independently.
 ```
 
 ---
@@ -1608,45 +1618,50 @@ you through the framework I've built if helpful."
 **Q: Tell me about your API testing experience.**
 
 ```
-Situation: At Cerexio, I worked on testing Angular (PrimeNG) applications that
-had REST API backends.
+Situation: At Cerexio (March–September 2024), I tested Angular PrimeNG enterprise
+applications with REST API backends. When I joined, there was no structured API
+testing — developers tested endpoints manually and bugs were often found late.
 
-Task: I needed to verify both the UI behaviour and the underlying API responses
-were correct.
+Task: As the QA intern, build API test coverage for core endpoints — authentication,
+CRUD operations, and reporting.
 
-Action: I used Postman to design collections covering all endpoints — GET, POST,
-PUT, DELETE. I wrote test scripts in Postman using JavaScript assertions to
-verify status codes, response body fields, and response times. I tracked any
-API discrepancies in JIRA with clear reproduction steps.
+Action: I used Postman — organized collections per API module, JavaScript test
+scripts validating status codes, response body fields, and data types. Set up
+Postman environments for development and staging so the same collection ran
+against both with one variable swap. Standard practice: negative test cases for
+every endpoint — missing fields, invalid data, unauthorized requests.
 
-Result: By testing the API layer independently from the UI, I caught several
-backend bugs early — before they surfaced in UI testing, which is more expensive
-to debug.
+Result: We caught API bugs before they reached the UI layer, reducing frontend
+debugging time. The Postman collections became the team's shared API documentation.
+I handed over a runnable, documented API test suite when I moved on.
 
 [If asked about RestAssured]:
-"Since then I've been building Java RestAssured automation to complement my
-Postman skills — structured test classes with BaseTest, RequestSpecification,
-DataProviders, and JSON Schema validation. Happy to discuss the architecture."
+"I've been building Java RestAssured automation to complement my Postman experience —
+structured test classes with RequestSpecification, DataProviders, and JSON Schema
+validation. Happy to discuss the architecture."
 ```
 
 ---
 
-**Q: Tell me about your BDD experience.**
+**Q: Tell me about your BDD / Cucumber experience.**
 
 ```
-Situation: In my Singer Page Testing project, I built an automated test suite
-for a web application.
+Situation: Singer Page Testing project — building automated tests for the Singer
+website with no existing automation framework.
 
-Task: I wanted readable tests that non-technical stakeholders could understand.
+Task: Create tests that non-technical stakeholders could read and verify — not just
+test scripts readable only by developers.
 
-Action: I implemented Serenity BDD with Cucumber — wrote feature files in Gherkin
-(Given/When/Then), implemented step definitions in Java using Selenium WebDriver,
-and used Serenity's reporting to generate living documentation showing test results
-against feature scenarios.
+Action: Implemented Serenity BDD with Cucumber. Wrote feature files in Gherkin
+(Given/When/Then) that anyone on the team could read. Implemented step definitions
+in Java using Selenium WebDriver. Used Serenity's living documentation reporting —
+after each run, HTML reports show which scenarios passed and what was covered,
+against the feature language, not the code language.
 
-Result: The test suite was readable by non-developers, which made it easier to
-verify coverage against requirements. Serenity's HTML reports clearly showed
-which scenarios passed and which were pending.
+Result: Readable test suite that covered core user journeys. Serenity reports
+made test results accessible to non-developers. I now understand the full
+three-layer BDD structure — feature files, step definitions, page objects — not
+just the theory.
 ```
 
 ---
@@ -1654,17 +1669,51 @@ which scenarios passed and which were pending.
 **Q: Tell me about your CI/CD experience.**
 
 ```
-Situation: At Qoria Lanka, tests needed to run automatically — not just locally.
+Situation: At Qoria Lanka, the Playwright test suite was being run manually before
+releases — not integrated into the delivery pipeline. Feedback was slow: PR merged,
+then QA found issues after the fact.
 
-Task: Integrate the test suite into the delivery pipeline.
+Task: Integrate the test suite into GitHub Actions so tests ran automatically on
+every pull request. Also coordinate with GCP-triggered pipelines for deployment
+validation.
 
-Action: I worked with GitHub Actions workflows — configuring .yml files to trigger
-test runs on pull requests and pushes to main. I also worked with GCP-triggered
-executions for cloud-based test runs. Tests were set up to block merges if
-critical tests failed.
+Action: Worked on GitHub Actions workflow YAML — install Node.js and dependencies,
+install Playwright browsers, run tests headless against a staging deployment, upload
+test artifacts on failure. For GCP-triggered executions: tests run automatically
+when a new build is deployed to the cloud environment, validating the deployment
+before it progresses further. Critical test failures block PR merges.
 
-Result: Every PR was automatically validated before merge, catching issues that
-would have been missed without automation in the pipeline.
+Result: PRs now trigger automated test runs. Developers see results on GitHub
+before code review completes. We caught regressions in the first month that
+would previously have reached staging. Feedback loop went from end-of-sprint
+to same-day.
+```
+
+---
+
+**Q: Tell me about your MCP / Agent integration experience.**
+
+```
+Situation: At Qoria Lanka, the team began exploring AI-augmented testing workflows
+as AI tooling matured. Traditional automation handles repetitive regression, but
+there's a gap in intelligent test generation and defect pattern analysis.
+
+Task: Contribute to integrating MCP and Agent tools into our testing workflow.
+
+Action: I worked on connecting Claude-based agents via MCP (Model Context Protocol)
+to our testing pipeline. This involved configuring agent integrations that could
+interpret test results, assist with test case generation from acceptance criteria,
+and surface patterns in defect reports. Working with MCP requires understanding
+how to structure agent inputs and outputs, handle context windows, and integrate
+AI responses into workflow decisions — which is different from scripted automation.
+
+Result: The team gained a working AI-augmented layer on top of traditional
+automation. I gained experience in a frontier area of QA tooling that most
+engineers — at any experience level — haven't worked with yet. It's also shaped
+how I think about where automation is heading over the next few years.
+
+[Why mention it]: This differentiates you. Most QA candidates can talk about
+Selenium and Playwright. Very few can speak credibly about MCP integrations.
 ```
 
 ---
@@ -1672,94 +1721,195 @@ would have been missed without automation in the pipeline.
 **Q: Tell me about a time you worked in an Agile team.**
 
 ```
-Situation: Both at Cerexio and Qoria, teams worked in Agile sprints.
+Situation: Both at Cerexio and Qoria, teams worked in Agile two-week sprints.
+I came from university where testing was a phase after development — in my
+first sprint at Cerexio I quickly realized QA was expected from the very start.
 
-Task: Contribute as QA in all sprint ceremonies.
+Task: Learn how to contribute meaningfully to each ceremony and shift from
+"testing at the end" to "quality throughout the sprint."
 
-Action: In sprint planning I reviewed stories and raised questions about missing
-acceptance criteria. In daily standups I reported testing progress and blockers.
-I participated in retrospectives and raised quality-related process improvements.
-At Cerexio I collaborated with developers directly on defect reproduction and fixes.
+Action: In sprint planning, I reviewed user stories for testability — "what
+happens when the user enters invalid data?" or "how do we define done here?"
+These questions either clarified ambiguous requirements or flagged gaps before
+development started. In backlog grooming at Cerexio, I contributed to writing
+acceptance criteria alongside the product owner. In retrospectives at Qoria, I
+raised observations about where bugs were being found late.
 
-Result: Early involvement in sprint planning meant fewer surprises during testing
-— I'd already flagged gaps in requirements before development started.
+Result: At Qoria, I became the person who spots acceptance criteria gaps in
+sprint planning. The team found this valuable — it reduced "this needs
+clarification" comments during actual testing and reduced rework.
+```
+
+---
+
+**Q: Tell me about a significant bug you found.**
+
+```
+Situation: During regression at Qoria for an EdTech Insight sprint release, I
+was testing a report export feature. School administrators use this to export
+student activity reports as CSV files for a selected date range.
+
+Task: Run regression tests before release. The feature had passed developer
+testing on the happy path.
+
+Action: During exploratory testing I tested a date range crossing a month
+boundary — e.g. January 28 to February 4. Happy path (within a single month)
+worked correctly. But crossing a month boundary silently dropped the second
+month's data from the CSV. No error message. The file downloaded with a 200
+status code. A school administrator would never know the data was incomplete.
+
+I documented with exact reproduction steps, the specific dates, a screenshot
+comparing in-app data versus CSV content, and expected versus actual record
+counts. Flagged as high severity — silent data integrity failure.
+
+Result: Developer found an off-by-one error in the SQL BETWEEN clause.
+Fixed before release. Product owner thanked me specifically — data accuracy
+is critical for schools trusting the platform. I added cross-month-boundary
+tests to the regression suite permanently.
+```
+
+---
+
+**Q: Tell me how the Diabetic Retinopathy project relates to your QA thinking.**
+
+```
+Situation: My university final year project (B.Sc. IT & Management, University
+of Moratuwa) — an AI-powered Diabetic Retinopathy Detection System. Includes
+an AI chatbot, Python ML model for retinal image classification, NLP for natural
+language interactions, and a React.js frontend.
+
+What it taught me about quality:
+- Testing ML models is fundamentally different from testing deterministic software.
+  Accuracy, precision, recall, and F1-score are quality metrics — a test can
+  technically "pass" while the model is dangerously wrong for certain inputs.
+- Testing an NLP chatbot means thinking about input variation, edge case prompts,
+  and output relevance — not just status codes and response bodies.
+- False positives vs false negatives in ML directly maps to risk thinking in
+  software testing: what's the cost of a missed defect versus a false alarm?
+
+How to frame it:
+"This project showed me that 'quality' means different things for different
+systems. In traditional software, a passing test means the system behaved
+as specified. In ML, a passing test means the model output was within acceptable
+probability ranges — which is a more nuanced and interesting quality problem.
+I bring that thinking to how I assess risk in any software system I test."
 ```
 
 ---
 
 ### Your Projects — How to Talk About Each
 
-**Singer Page Testing (Serenity + Cucumber + BDD)**
+**Singer Page Testing Application (Serenity + Cucumber + BDD + Java + Selenium WebDriver)**
 ```
-"I built a full BDD test suite using Serenity and Cucumber. Feature files in Gherkin,
-step definitions in Java with Selenium WebDriver. This gave me practical BDD experience —
-not just understanding the theory. Serenity's reports are excellent for showing
-test coverage against scenarios."
-```
-
-**Python + Pytest + Selenium Automation**
-```
-"I built an automated framework in Python using Pytest and Selenium. This gave me
-cross-language automation experience — I can work in both Java and Python test stacks.
-Pytest's fixture model is similar to TestNG's BeforeClass/AfterClass in how you
-set up and tear down test state."
+"I built a full BDD test suite from scratch using Serenity and Cucumber — feature
+files in Gherkin, step definitions in Java with Selenium WebDriver. This gave me
+hands-on BDD experience, not just theory. Serenity's living documentation reports
+mean stakeholders can see what was tested without reading code. The hardest part
+was handling Singer's JS-rendered navigation menu — I had to switch from CSS
+selectors to XPath targeting text content and add explicit waits to get stable tests."
 ```
 
-**Playwright + JavaScript Automation**
+**Automation Project Using Python and Pytest (Selenium + Pytest + Python)**
 ```
-"I built UI automation with Playwright in JavaScript. Playwright's API is clean —
-auto-waiting reduces flakiness, and the built-in HTML reporter is excellent.
-At Qoria I've also used Playwright for automation, so I have professional experience
-with it now, not just personal project experience."
+"I built an automated test framework in Python using Pytest and Selenium. This
+expanded me beyond Java — I can work in both Python and Java test stacks.
+Pytest's fixture model is similar to TestNG's Before/After setup, and parametrize
+is the equivalent of DataProvider. Learning fixture scope (session vs function vs
+class) was the key technical lesson that made tests properly isolated."
 ```
 
-**Diabetic Retinopathy Detection (AI/ML)**
+**UI Automation Project Using Playwright (Playwright + JavaScript + Node.js)**
 ```
-"This is my final year project — an AI chatbot for medical symptom analysis.
-It shows my ability to work on complex technical problems beyond testing.
-Understanding how ML models work helps me think about what to test in AI-driven
-features — input validation, model output ranges, edge case inputs."
+"I built Playwright automation in JavaScript — Page Object pattern, async/await
+handling, Playwright's built-in expect API for assertions, and HTML reports for
+debugging failures. This personal project is what prepared me to use Playwright
+professionally at Qoria. Understanding Playwright's browser context model — how
+each test gets an isolated context — matters for state management between tests."
+```
+
+**Qoria EdTech Insight — Current Role (Selenium + TestNG + Playwright + GitHub Actions + GCP + MCP/Agents)**
+```
+"My current professional work. I write Selenium+TestNG automation in Java and
+Playwright tests in JavaScript. The tests run in GitHub Actions on every PR and
+through GCP-triggered pipelines for deployment validation. I've also been working
+on MCP and Agent integrations — connecting Claude-based AI agents to testing
+workflows for test generation and defect pattern analysis. This is frontier work
+in QA tooling — something I'm genuinely excited about."
+```
+
+**Cerexio — Internship (Angular PrimeNG + Postman + JIRA + Agile)**
+```
+"Six months of professional QA on an enterprise Angular PrimeNG application.
+I did manual and automated testing, API testing with Postman across all endpoints,
+defect reporting in JIRA, and participated fully in Agile ceremonies. The Angular
+PrimeNG UI had complex custom dropdowns and data tables — testing these required
+understanding component state, not just static HTML. This internship is where I
+built my API testing discipline and defect reporting rigour."
+```
+
+**Diabetic Retinopathy Detection System (AI/ML — Python + NLP + React.js + ML)**
+```
+"My final year project is an AI chatbot system for diabetic retinopathy. Python
+ML model for retinal image classification, NLP for the chatbot interaction layer,
+React.js frontend. What this demonstrates from a QA perspective: I understand
+how ML systems fail differently from deterministic software. That shapes how I
+approach risk in any system I test — especially AI-driven features."
 ```
 
 ---
 
-### Skills You Should Highlight More Than Others
+### Skills You Should Highlight — With Correct Evidence
 
-| Skill | Your Evidence | Confidence to claim |
-|-------|--------------|---------------------|
-| Selenium + Java | Qoria (professional), Singer project | High |
-| Playwright | Qoria (professional), personal project | High |
-| API testing (Postman) | Cerexio (professional) | High |
-| RestAssured | Built this week, understand deeply | Medium — say "actively building" |
-| BDD / Cucumber | Singer project (personal) | Medium — say "project experience" |
-| Jenkins CI/CD | Qoria (professional) | Medium |
-| GitHub Actions | Qoria (professional) | High |
-| Appium | No experience | Low — study concepts, be honest |
-| JMeter / Performance | Listed in skills | Clarify if asked how much |
-| Gauge | No experience | Study basics, relate to Cucumber |
+| Skill | Your Actual Evidence | Confidence to Claim |
+|-------|---------------------|---------------------|
+| Selenium + Java | Qoria (professional), Singer project (personal) | High |
+| TestNG | Qoria daily use — groups, @Before/@After, parallel | High |
+| Playwright + JavaScript | Qoria (professional), personal Playwright project | High |
+| Python | Python+Pytest project, Diabetic Retinopathy ML/NLP | High |
+| API testing (Postman) | Cerexio — 6 months on enterprise app | High |
+| BDD / Cucumber | Singer — built Serenity+Cucumber framework from scratch | High |
+| JIRA | Cerexio — daily defect tracking and sprint management | High |
+| GitHub Actions | Qoria — configured PR pipelines in YAML | Medium |
+| GCP Test Pipelines | Qoria — deployment-triggered test executions | Medium |
+| MCP / Agent Integration | Qoria — Claude-based agent integrations (active work) | Medium |
+| Serenity BDD | Singer project — full framework build and reports | Medium |
+| Pytest | Python+Pytest project — fixtures, parametrize, conftest | Medium |
+| Angular (testing it) | Cerexio — tested Angular PrimeNG app | Medium |
+| React.js | Diabetic Retinopathy project frontend | Medium |
+| RestAssured | Learning/study level — fluent API understood | Honest — say "actively building" |
+| JMeter / Performance | Listed in CV — clarify depth if asked | Honest |
+| Cypress | Listed in CV — understand architecture | Honest |
+| Jenkins | CI/CD concepts, not hands-on in production | Honest |
+| Appium | Conceptual knowledge only | Honest — study concepts, don't bluff |
+| Gauge | Read docs, not used in a project | Honest — relate to Cucumber |
+
+**Note on Jenkins:** At Qoria you use GitHub Actions, not Jenkins. Don't claim Jenkins as professional experience — you haven't used it in production.
 
 ---
 
 ### Questions YOU Should Ask in the Interview
 
 ```
-1. "What does the automation stack look like currently — what tools and frameworks
-   are the team using day to day?"
+1. "How does QA fit into the development cycle here — are testers involved from
+   sprint planning or brought in once code is complete?"
 
-2. "What does the test coverage look like today — mostly manual, mostly automated,
-   or a mix?"
+2. "What does the automation coverage look like today — what's the biggest gap
+   the team wants to close in the next 6 months?"
 
-3. "How does QA integrate with the development process — do QAs work within
-   feature teams or as a separate QA team?"
+3. "I've been working on MCP and Agent integrations at Qoria — is AI-augmented
+   testing something this team is exploring, or is the focus on traditional
+   automation for now?"
 
 4. "What would a successful first 3 months look like in this role?"
 
-5. "What is the biggest quality challenge the team is facing right now?"
+5. "What is the biggest quality challenge the team is facing right now —
+   not in the future, but today?"
 ```
 
-These questions show you think like a senior even if your years don't yet.
+These questions show you think like a senior even if your years don't yet. Question 3 in particular opens a conversation where your actual current work at Qoria is directly relevant.
 
 ---
 
-*Preparation Guide v1.0 — Senior QA Engineer Interview | Personalized for Kupeshanth Kupenthiran*
-*Tools: Selenium + RestAssured + Playwright + Cucumber/Serenity + CI/CD + ISTQB*
+*Preparation Guide v2.0 — Senior QA Engineer Interview | Personalized for Kupeshanth Kupenthiran*
+*Roles: Trainee QE @ Qoria Lanka (Sep 2025–Present) | Intern SE & QA @ Cerexio (Mar–Sep 2024)*
+*Tools: Selenium + TestNG + Playwright + Cucumber/Serenity + GitHub Actions + GCP + MCP/Agents + Postman + JIRA*
